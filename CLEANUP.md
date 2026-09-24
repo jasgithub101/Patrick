@@ -48,7 +48,7 @@ changes. It is maintained continuously so that cleanup is never reconstructed fr
 | ONNX model assets | `app\src\main\assets\models\` | 16.1 MB |
 | LFW dataset cache | `tools\.cache\`, `tools\dataset_out\` | ~200–400 MB |
 | Project-local Python virtualenv (holds Graphify + its 32 packages) | `.venv\` | ~100 MB |
-| Graphify skill, hooks, CLAUDE.md pointer | `.claude\skills\graphify\`, `.claude\settings.json` hooks, `.claude\CLAUDE.md` | ~90 KB |
+| Graphify skill, CLAUDE.md pointer | `.claude\skills\graphify\`, `.claude\CLAUDE.md` (hooks already removed by user) | ~90 KB |
 | Graphify output | `graphify-out\` | small; regenerable |
 | Downloaded installer temp | `C:\Users\jassu\Android\sdk-tmp` | ~143 MB |
 

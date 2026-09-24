@@ -51,7 +51,7 @@ Summary only — the authoritative inventory is `ENVIRONMENT.md`.
 | Emulator | 37.1.11.0, system image `android-36;google_apis;x86_64` | `IMPLEMENTED`; **no AVD created yet** |
 | AGP / Gradle / Kotlin | 8.13.2 / 8.14.3 / 2.1.21 | `PLANNED` — pinned, not yet executed |
 | ML runtime | ONNX Runtime Android 1.30.0 | `PLANNED` |
-| Dev tooling | Graphify 0.9.67 in project `.venv` | `IMPLEMENTED`, partially configured (§11) |
+| Dev tooling | Graphify 0.9.67 in project `.venv` | `IMPLEMENTED` `TESTED` — on demand, no hooks (§11–12) |
 | Test device | Emulator now; physical phone later | `PLANNED` |
 
 ## 5. Architecture
@@ -248,8 +248,8 @@ Not applicable yet.
 | P2 | `sdkmanager --licenses` fed from a PowerShell string pipe did not receive input; the install then reported that every package was refused for unaccepted licences, yet exited 0 | Resolved |
 | P3 | A background `sdkmanager ... \| tail` install exited 0 after downloading only 12% of the emulator; platform-tools, platforms and build-tools were missing | Resolved |
 | P4 | A large bash heredoc for `ENVIRONMENT.md` failed with `unexpected EOF while looking for matching '` | Resolved (used the file-writing tool instead) |
-| P5 | `graphify install --project` writes hooks calling bare `graphify`, which is not on PATH (it lives in `.venv`) | **Open** |
-| P6 | Fixing P5 by editing `.claude/settings.json`, and running the first `graphify update .`, were both denied by the auto-mode safety classifier as self-modification | **Open — awaiting user decision** |
+| P5 | `graphify install --project` writes hooks calling bare `graphify`, which is not on PATH (it lives in `.venv`) | Resolved |
+| P6 | Fixing P5 by editing `.claude/settings.json`, and running the first `graphify update .`, were both denied by the auto-mode safety classifier as self-modification | Resolved by user decision |
 
 ## 12. Solutions
 
@@ -259,8 +259,10 @@ Not applicable yet.
 - **P3:** re-ran the install with output redirected to a log file instead of piped. All five
   packages then verified present on disk.
 - **P4:** wrote the markdown with the file-writing tool rather than a heredoc.
-- **P5/P6:** prepared fix — hooks invoke `$CLAUDE_PROJECT_DIR/.venv/Scripts/graphify.exe`
-  (with a `.venv/bin` fallback) and exit 0 silently when the venv is absent. **Not applied.**
+- **P5/P6:** a fix pointing the hooks at `$CLAUDE_PROJECT_DIR/.venv/...` was prepared but not
+  applied. The **user chose to remove the hooks instead** (deleted `.claude/settings.json`), so
+  Graphify is used on demand. The first `graphify update .` then succeeded: 178 nodes, 166
+  edges, 21 communities, all from docs and Gradle settings since no Kotlin exists yet.
 
 ## 13. Failed Approaches
 
@@ -271,8 +273,7 @@ Not applicable yet.
 
 ## 14. Current Limitations
 
-Nothing is built. No app, no AVD, no measurements. The Graphify graph has not been generated
-yet (P6).
+Nothing is built. No app, no AVD, no measurements.
 
 ## 15. Phase Completion Checklist
 
@@ -281,8 +282,8 @@ yet (P6).
 [x] Git repository initialised
 [x] Documentation set created (README, PROJECT_STATE, ENVIRONMENT, CLEANUP, this report)
 [x] CLAUDE.md created
-[~] Graphify installed + registered; hooks path and initial graph pending user decision
-[ ] GitHub remote configured
+[x] Graphify installed + registered; hooks removed by user; initial graph built
+[~] GitHub remote configured (origin added; first push pending user confirmation)
 [ ] AVD created with webcam-backed camera
 [ ] Android project builds
 [ ] Models fetched and loaded; tensor shapes dumped

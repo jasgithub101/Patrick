@@ -18,7 +18,7 @@ Status vocabulary used throughout the docs:
 | Development toolchain (JDK 17, Android SDK 36, emulator, adb) | `IMPLEMENTED` `TESTED` — versions verified by direct invocation |
 | Git repository + `.gitignore` | `IMPLEMENTED` |
 | Project documentation set + `CLAUDE.md` | `IMPLEMENTED` |
-| Graphify 0.9.67 (project `.venv`, project-scoped skill) | `IMPLEMENTED` — hooks misconfigured, graph not yet built (see blockers) |
+| Graphify 0.9.67 (project `.venv`, project-scoped skill) | `IMPLEMENTED` `TESTED` — used on demand (hooks removed); initial graph built |
 | Gradle settings / wrapper config | `IMPLEMENTED` — not yet executed |
 | Android app module | `PLANNED` |
 | Face detection (SCRFD) | `PLANNED` |
@@ -68,8 +68,7 @@ In brief:
 
 | Blocker | Impact | Owner |
 |---|---|---|
-| Graphify hooks call bare `graphify` (not on PATH); the fix and the first `graphify update .` were denied by the auto-mode classifier as self-modification | Hooks fail harmlessly (non-blocking) on each Bash/Grep/Read/Glob call; no graph yet | User decision |
-| No GitHub remote yet — `gh` CLI is not installed and no repo URL has been supplied | Local commits work; pushing and any future cloud session do not | User |
+| First push to `origin` (public repo `jasgithub101/Patrick`) awaits user confirmation: commit metadata would publish the author email | Nothing is on GitHub yet | User decision |
 | AVD not yet created; WHPX may need enabling from an elevated prompt (AMD CPU, so no HAXM) | Emulator testing cannot start | Next step |
 
 Neither blocks M1.

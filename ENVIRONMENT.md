@@ -241,16 +241,21 @@ LLM usage:          None. `graphify update` is local tree-sitter AST extraction.
 Files written into the repository by `install --project`:
                     .claude/skills/graphify/SKILL.md + references/ (8 files, ~85 KB)
                     .claude/CLAUDE.md          (3-line pointer to the skill)
-                    .claude/settings.json      (two PreToolUse hooks - see open issue below)
+                    .claude/settings.json      (two PreToolUse hooks - REMOVED by user, see below)
                     CLAUDE.md                  (a `## graphify` section; since replaced by the
                                                 project CLAUDE.md, Appendix B)
 How to remove it:   .venv/Scripts/graphify.exe uninstall --purge   (removes skill, hooks,
                     graphify-out/), then delete .venv if nothing else uses it.
-Current status:     Installed and registered. Initial graph NOT yet generated (see below).
+Current status:     Active. Skill registered; hooks removed; initial graph generated.
 Classification:     PROJECT-INSTALLED
 ```
 
-**Open issue — hook command cannot resolve `graphify`.** For project-scoped installs Graphify
+**RESOLVED 2026-09-24 — the user removed the hooks** by deleting `.claude/settings.json` (it
+contained only Graphify's two hooks). Graphify is now used on demand, per CLAUDE.md
+Appendix B, with no always-on hooks. First graph built with `graphify update .`: 178 nodes,
+166 edges, 21 communities; `.venv` correctly excluded. Original issue, kept for history:
+
+**Hook command could not resolve `graphify`.** For project-scoped installs Graphify
 deliberately writes the bare command `graphify hook-guard search|read` so the committed config
 stays portable. Here `graphify` is inside `.venv` and not on PATH, so these PreToolUse hooks
 cannot run. They are non-blocking (non-strict mode always returns `decision: allow`), so the
@@ -310,3 +315,4 @@ Removed by deleting `app/src/main/assets/models/`. Not committed to git.
 | 2026-09-24 | Baseline recorded. JDK 17, Android cmdline-tools, SDK licences installed. SDK component install started. |
 | 2026-09-24 | SDK components verified installed (API 36, build-tools 36.0.0, emulator 37.1.11.0, platform-tools 37.0.1). |
 | 2026-09-24 | Project `.venv` created; Graphify 0.9.67 installed into it and registered project-scoped. Hook path issue open. |
+| 2026-09-24 | User removed Graphify hooks (`.claude/settings.json`). Initial graph built. Git remote `origin` added (public repo `jasgithub101/Patrick`); not yet pushed. |
