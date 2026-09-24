@@ -359,9 +359,33 @@ Removed by deleting `.cache/` and `app/build/`. Licence: **non-commercial resear
 
 ## 5. Not yet installed (recorded here when they happen)
 
-- Python packages for `tools/prepare_dataset.py` (expected `pyarrow`, `pillow`) — will be
-  installed into the existing project `.venv` (section 2.6), not the system Python.
-- LFW dataset cache (~188 MB parquet from the Hugging Face mirror).
+(Nothing pending. Items previously listed here are now recorded below.)
+
+### 5.1 pyarrow (project `.venv`)
+
+```
+Component:          pyarrow 21.0.0
+Reason:             tools/prepare_dataset.py reads the LFW parquet file
+Date:               2026-09-24
+Installation method: .venv/Scripts/python.exe -m pip install "pyarrow==21.0.0"
+Removal method:     delete .venv (or pip uninstall pyarrow inside it)
+Status:             Active
+Origin:             PROJECT-INSTALLED; system Python still 27 packages (verified)
+```
+
+Pillow was not needed: the parquet stores JPEG bytes, which are written out unchanged.
+
+### 5.2 LFW dataset cache
+
+```
+Component:          LFW parquet, Hugging Face logasja/lfw @ 0ee47979927a48dadf11083cb53b51439fa92dc9
+Size / checksum:    188,443,388 bytes, SHA-256 40a011f0...2684f91b (verified by the tool)
+Derived sets:       .cache/lfw/eval_small/ (70 images), tools/dataset_out/bulk/ (801 images)
+Date:               2026-09-24
+Removal method:     delete .cache/lfw and tools/dataset_out
+Status:             Active; gitignored, never committed
+Origin:             PROJECT-INSTALLED
+```
 
 ---
 

@@ -48,15 +48,15 @@ Summary only — the authoritative inventory is `ENVIRONMENT.md`.
 | Host | Windows 11 Home 10.0.26200, AMD Ryzen 7 250, 15.3 GB RAM | `OBSERVED` |
 | JDK | Temurin 17.0.20.1 | `IMPLEMENTED` (installed) |
 | Android SDK | platform android-36, build-tools 36.0.0, platform-tools 37.0.1 | `IMPLEMENTED` (installed) |
-| Emulator | 37.1.11.0, system image `android-36;google_apis;x86_64` | `IMPLEMENTED`; **no AVD created yet** |
-| AGP / Gradle / Kotlin | 8.13.2 / 8.14.3 / 2.1.21 | `PLANNED` — pinned, not yet executed |
-| ML runtime | ONNX Runtime Android 1.30.0 | `PLANNED` |
+| Emulator | 37.1.11.0, AVD `patrick_api36` (Pixel 7, API 36 x86_64, webcam0 front camera, WHPX) | `IMPLEMENTED` `TESTED` |
+| AGP / Gradle / Kotlin | 8.13.2 / 8.14.3 / 2.2.20 (see D11) | `IMPLEMENTED` `TESTED` — builds |
+| ML runtime | ONNX Runtime Android 1.30.0 | `IMPLEMENTED` `TESTED` — both models run on the emulator (E1) |
 | Dev tooling | Graphify 0.9.67 in project `.venv` | `IMPLEMENTED` `TESTED` — on demand, no hooks (§11–12) |
 | Test device | Emulator now; physical phone later | `PLANNED` |
 
 ## 5. Architecture
 
-`PLANNED` — nothing below is implemented yet.
+Status per component is tracked in section 6. Matcher and decision engine are `IMPLEMENTED` and `TESTED`; the rest is `PLANNED`.
 
 ```text
             ┌──────────── ui (Compose) ────────────┐
@@ -83,9 +83,11 @@ Summary only — the authoritative inventory is `ENVIRONMENT.md`.
 |---|---|
 | Toolchain (JDK, SDK, emulator binaries) | `IMPLEMENTED` `TESTED` (version queries succeed) |
 | Git repo, `.gitignore` | `IMPLEMENTED` |
-| Gradle settings, wrapper properties, `gradle.properties` | `IMPLEMENTED`, not yet executed |
-| App module, `fetchModels` task | `PLANNED` (next) |
-| Everything in §5 | `PLANNED` |
+| Gradle build + `fetch<Variant>Models` (checksum-verified) | `IMPLEMENTED` `TESTED` |
+| App module, M1 ModelInspector screen | `IMPLEMENTED` `TESTED` on emulator |
+| FaceMatcher (brute-force cosine, per-person aggregation, model-version guard) | `IMPLEMENTED` `TESTED` (JVM) |
+| RecognitionDecisionEngine | `IMPLEMENTED` `TESTED` (JVM) |
+| Detector, aligner, embedder wrapper, quality, DB, camera, UI | `PLANNED` (M2-M5) |
 
 ## 7. Technical Decisions
 
@@ -195,12 +197,10 @@ Reason:     A cloud container has no webcam, no AVD camera and no adb bridge to 
             so the camera flow and latency could not be verified there. move_to_cloud also
             requires a git remote.
 Future:     Cloud remains usable for camera-free work once a GitHub remote exists.
-Update 2026-09-24 (after M1): the user asked to use the cloud wherever possible. The GitHub
-            remote now exists, so the session was moved to a Claude Code cloud session for the
-            camera-free parts of M2-M5 (decoder, alignment, quality, database, dataset tooling,
-            JVM tests that run the real models on real images). Emulator, webcam and latency
-            work stays local. No tool for running a parallel cloud session was available, so
-            this is a move rather than a split.
+Update 2026-09-24 (after M1): the user asked to use the cloud wherever possible. A move to a
+            cloud session was attempted and refused because the account has no cloud
+            environment. The user then chose to drop the cloud session and continue locally.
+            Decision (a) stands. No cloud environment exists or was used.
 ```
 
 ### D8 — Gallery population
@@ -318,6 +318,7 @@ Not applicable yet.
 | P5 | `graphify install --project` writes hooks calling bare `graphify`, which is not on PATH (it lives in `.venv`) | Resolved |
 | P6 | Fixing P5 by editing `.claude/settings.json`, and running the first `graphify update .`, were both denied by the auto-mode safety classifier as self-modification | Resolved by user decision |
 | P7 | `local.properties` written with `sdk.dir=C\:\Users\...`: the shell collapsed the doubled backslashes, and Java properties treats `\` as an escape, so the path would have resolved wrongly | Resolved: forward slashes (`C:/Users/jassu/Android/Sdk`) |
+| P10 | `move_to_cloud` refused: "This account has no cloud environment yet" | Closed by user decision: stay local |
 | P9 | Second build failed: `Unresolved reference: net` / `nio` in `app/build.gradle.kts`. Inside a Gradle Kotlin script `java` resolves to the `java {}` project extension, so `java.net.URI` is not the JDK package | Resolved with top-level `import java.net.URI` etc. |
 | P8 | First `assembleDebug` failed: `settings.gradle.kts:5 Illegal escape: '\.'`. The regex `"com\\.android.*"` lost a backslash when written through a bash heredoc, and a Python fix through bash lost it again | Resolved: Kotlin raw strings `"""com\.android.*"""`, written with an exact-edit tool. Lesson: don't write backslash-heavy source through the shell |
 

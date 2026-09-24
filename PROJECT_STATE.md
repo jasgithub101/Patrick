@@ -33,11 +33,8 @@ Status vocabulary used throughout the docs:
 
 ## What is currently being worked on?
 
-**Where:** moving to a Claude Code **cloud session** (user request, 2026-09-24) for the
-camera-free work below. Anything needing the emulator, webcam, adb or latency measurement must
-be done in a **local** session on the laptop. The cloud session cannot verify those and must not
-claim them.
-
+**Where:** locally on the laptop. A cloud-session move was attempted, but the account has no
+cloud environment, and the user chose to continue locally.
 
 M2 — vertical slice: CameraX capture, SCRFD decoding (layout now confirmed, see Phase 1
 report E1), 5-point alignment, embedding, and wiring the tested matcher and decision engine.
