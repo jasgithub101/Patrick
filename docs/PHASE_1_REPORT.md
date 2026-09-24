@@ -195,6 +195,12 @@ Reason:     A cloud container has no webcam, no AVD camera and no adb bridge to 
             so the camera flow and latency could not be verified there. move_to_cloud also
             requires a git remote.
 Future:     Cloud remains usable for camera-free work once a GitHub remote exists.
+Update 2026-09-24 (after M1): the user asked to use the cloud wherever possible. The GitHub
+            remote now exists, so the session was moved to a Claude Code cloud session for the
+            camera-free parts of M2-M5 (decoder, alignment, quality, database, dataset tooling,
+            JVM tests that run the real models on real images). Emulator, webcam and latency
+            work stays local. No tool for running a parallel cloud session was available, so
+            this is a move rather than a split.
 ```
 
 ### D8 — Gallery population
