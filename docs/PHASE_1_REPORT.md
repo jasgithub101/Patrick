@@ -228,9 +228,70 @@ Reason:     (a) would add ~30 packages to the pre-existing Whisper environment.
             directory. Verified: system pip still lists 27 packages after the install.
 ```
 
+### D11 — Dependency version set
+
+```text
+Decision:   Which library versions to pin
+Options:    (a) newest of every library (Sept 2026: AGP 9.4, Kotlin 2.4.20, core 1.19,
+                compose BOM 2026.09) (b) a coherent set from one release era
+Selected:   (b) the AGP 8.13 era (late 2025): AGP 8.13.2, Gradle 8.14.3, Kotlin 2.2.20,
+            KSP 2.2.20-2.0.3, core 1.17.0, activity-compose 1.11.0, lifecycle 2.9.4,
+            compose BOM 2025.10.01, Room 2.8.3, CameraX 1.5.1, DataStore 1.1.7.
+            ONNX Runtime stays at 1.30.0 (a Java/JNI library; its x86_64 ABI was verified).
+Reason:     Mixing newest-of-everything risks libraries that require a newer compileSdk,
+            AGP 9, or Kotlin metadata newer than the compiler can read. Each pinned
+            version was verified to exist on Maven before use.
+Trade-offs: Not on the latest releases. An upgrade pass is DEFERRED; it should be done as a
+            deliberate, separate change.
+```
+
+### D12 — How model files reach the APK
+
+```text
+Decision:   Where fetchModels writes the models
+Options:    (a) app/src/main/assets/models (gitignored)  (b) a generated assets directory
+            registered through AGP's variant API
+Selected:   (b) variant.sources.assets.addGeneratedSourceDirectory(...)
+Reason:     Gradle wires the task dependency automatically, so there are no implicit-dependency
+            validation errors from a task writing into src/. src/ stays clean. The download
+            is cached in .cache/models/ so `clean` does not re-download it. Both the zip and
+            each extracted model are SHA-256 verified:
+              buffalo_sc.zip  57d31b56…2de47c72
+              det_500m.onnx   5e4447f5…d8b4ea3a
+              w600k_mbf.onnx  9cc6e4a7…b319eb4f
+```
+
 ## 8. Experiments
 
-None run yet.
+### E1 — Model tensor layout and load/inference on the emulator (M1)
+
+```text
+Experiment:  Confirm both ONNX models load under ONNX Runtime Android and record their real
+             tensor layout before writing any decoding code.
+Objective:   Replace ASSUMED output ordering with OBSERVED ordering.
+Configuration:
+             ORT Android 1.30.0, default SessionOptions (CPU), zero-filled float input.
+             AVD patrick_api36: Pixel 7 profile, API 36 google_apis x86_64, 4 GB RAM,
+             WHPX acceleration; host AMD Ryzen 7 250.
+Method:      diagnostics/ModelInspector: create session from asset bytes, read declared
+             input/output info, run twice (first + warm), read runtime output shapes.
+Result (MEASURED, 2026-09-24, single run):
+  det_500m.onnx   in  input.1 [1, 3, -1, -1]  (dynamic H/W; probed at 640x640)
+                  out[0..2] scores  [12800,1] [3200,1] [800,1]     strides 8/16/32
+                  out[3..5] bboxes  [12800,4] [3200,4] [800,4]
+                  out[6..8] kps     [12800,10] [3200,10] [800,10]
+                  load 247.3 ms | first run 183.8 ms | warm run 180.7 ms
+  w600k_mbf.onnx  in  input.1 [-1, 3, 112, 112]
+                  out[0] [1, 512]
+                  load 167.0 ms | first run 39.9 ms | warm run 21.3 ms
+Observation: 12800 = 80*80*2 -> 2 anchors per location at stride 8 (640/8 = 80).
+             Output order is grouped by kind (all scores, then all boxes, then all kps),
+             ascending stride within each group. Output names (443, 468, ...) carry no meaning.
+Conclusion:  The SCRFD decoder will bind outputs by index with this layout, 2 anchors per
+             cell, 3 strides. Timings are EMULATOR figures on an x86 host. They are NOT
+             evidence for the <= 2 s phone target and only show the pipeline is plausibly
+             fast enough to develop against.
+```
 
 ## 9. Performance
 
@@ -250,6 +311,9 @@ Not applicable yet.
 | P4 | A large bash heredoc for `ENVIRONMENT.md` failed with `unexpected EOF while looking for matching '` | Resolved (used the file-writing tool instead) |
 | P5 | `graphify install --project` writes hooks calling bare `graphify`, which is not on PATH (it lives in `.venv`) | Resolved |
 | P6 | Fixing P5 by editing `.claude/settings.json`, and running the first `graphify update .`, were both denied by the auto-mode safety classifier as self-modification | Resolved by user decision |
+| P7 | `local.properties` written with `sdk.dir=C\:\Users\...`: the shell collapsed the doubled backslashes, and Java properties treats `\` as an escape, so the path would have resolved wrongly | Resolved: forward slashes (`C:/Users/jassu/Android/Sdk`) |
+| P9 | Second build failed: `Unresolved reference: net` / `nio` in `app/build.gradle.kts`. Inside a Gradle Kotlin script `java` resolves to the `java {}` project extension, so `java.net.URI` is not the JDK package | Resolved with top-level `import java.net.URI` etc. |
+| P8 | First `assembleDebug` failed: `settings.gradle.kts:5 Illegal escape: '\.'`. The regex `"com\\.android.*"` lost a backslash when written through a bash heredoc, and a Python fix through bash lost it again | Resolved: Kotlin raw strings `"""com\.android.*"""`, written with an exact-edit tool. Lesson: don't write backslash-heavy source through the shell |
 
 ## 12. Solutions
 
@@ -283,10 +347,12 @@ Nothing is built. No app, no AVD, no measurements.
 [x] Documentation set created (README, PROJECT_STATE, ENVIRONMENT, CLEANUP, this report)
 [x] CLAUDE.md created
 [x] Graphify installed + registered; hooks removed by user; initial graph built
-[~] GitHub remote configured (origin added; first push pending user confirmation)
-[ ] AVD created with webcam-backed camera
-[ ] Android project builds
-[ ] Models fetched and loaded; tensor shapes dumped
+[x] GitHub remote configured and pushed (public repo; commits use GitHub noreply email)
+[x] AVD created with webcam-backed camera (patrick_api36; WHPX usable, no admin step needed)
+[x] Android project builds (assembleDebug, 99 MB debug APK, x86_64 + arm64-v8a only)
+[x] Models fetched (checksum-verified) and loaded on the emulator; tensor shapes dumped (E1)
+[x] Decision engine + brute-force matcher implemented; 22/22 JVM unit tests pass
+    (incl. the different-person runner-up rule and the cross-model-version guard)
 [ ] Camera input
 [ ] Face detection
 [ ] Face alignment

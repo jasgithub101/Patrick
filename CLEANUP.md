@@ -44,8 +44,8 @@ changes. It is maintained continuously so that cleanup is never reconstructed fr
 | Android SDK (all components) | `C:\Users\jassu\Android\Sdk` | ~5.8 GB |
 | Android SDK licence files | `C:\Users\jassu\Android\Sdk\licenses` | 11 KB |
 | Gradle distribution + caches | `C:\Users\jassu\.gradle` | ~1–2 GB once built |
-| AVD images and config | `C:\Users\jassu\.android\avd` | ~2–8 GB once created |
-| ONNX model assets | `app\src\main\assets\models\` | 16.1 MB |
+| Model zip cache + extracted models | `.cache\models\`, `app\build\` | ~31 MB |
+| AVD `patrick_api36` | `C:\Users\jassu\.android\avd\patrick_api36.avd` | several GB once used |
 | LFW dataset cache | `tools\.cache\`, `tools\dataset_out\` | ~200–400 MB |
 | Project-local Python virtualenv (holds Graphify + its 32 packages) | `.venv\` | ~100 MB |
 | Graphify skill, CLAUDE.md pointer | `.claude\skills\graphify\`, `.claude\CLAUDE.md` (hooks already removed by user) | ~90 KB |
@@ -141,7 +141,7 @@ Removed automatically if the project directory itself is deleted:
 
 ```bash
 rm -rf "C:/Users/jassu/Downloads/Patrick/app/build" "C:/Users/jassu/Downloads/Patrick/build"
-rm -rf "C:/Users/jassu/Downloads/Patrick/app/src/main/assets/models"
+rm -rf "C:/Users/jassu/Downloads/Patrick/.cache"
 rm -rf "C:/Users/jassu/Downloads/Patrick/tools/.cache" "C:/Users/jassu/Downloads/Patrick/tools/dataset_out"
 rm -rf "C:/Users/jassu/Downloads/Patrick/.venv"
 rm -rf "C:/Users/jassu/Downloads/Patrick/graphify-out"

@@ -4,7 +4,7 @@ Short, always-current state of the project. Updated continuously.
 
 **Last updated:** 2026-09-24
 **Current phase:** Phase 1 — on-device face identification prototype
-**Current milestone:** M1 (project scaffolding) — M0 complete
+**Current milestone:** M2 (vertical slice) — M0 and M1 complete
 
 Status vocabulary used throughout the docs:
 `PLANNED` · `IMPLEMENTED` · `TESTED` · `MEASURED` · `OBSERVED` · `ASSUMED` · `DEFERRED`
@@ -16,36 +16,37 @@ Status vocabulary used throughout the docs:
 | Item | Status |
 |---|---|
 | Development toolchain (JDK 17, Android SDK 36, emulator, adb) | `IMPLEMENTED` `TESTED` — versions verified by direct invocation |
-| Git repository + `.gitignore` | `IMPLEMENTED` |
+| Git repository + GitHub remote (public `jasgithub101/Patrick`, noreply author email) | `IMPLEMENTED` `TESTED` — pushed, in sync |
 | Project documentation set + `CLAUDE.md` | `IMPLEMENTED` |
 | Graphify 0.9.67 (project `.venv`, project-scoped skill) | `IMPLEMENTED` `TESTED` — used on demand (hooks removed); initial graph built |
-| Gradle settings / wrapper config | `IMPLEMENTED` — not yet executed |
-| Android app module | `PLANNED` |
+| Gradle build (wrapper 8.14.3, AGP 8.13.2, Kotlin 2.2.20) + `fetch<Variant>Models` task | `IMPLEMENTED` `TESTED` — `assembleDebug` succeeds; model checksums verified |
+| Android app module (M1 model-inspector screen) | `IMPLEMENTED` `TESTED` on emulator |
+| AVD `patrick_api36` (webcam0 front camera, WHPX) | `IMPLEMENTED` `TESTED` — boots, app installs and runs |
 | Face detection (SCRFD) | `PLANNED` |
 | Face embedding (MobileFaceNet) | `PLANNED` |
 | Room database | `PLANNED` |
-| Similarity search | `PLANNED` |
-| Decision engine (MATCH/UNCERTAIN/UNKNOWN) | `PLANNED` |
+| Similarity search (brute-force cosine, per-person max / mean-top-2, model-version guard) | `IMPLEMENTED` `TESTED` (10 JVM unit tests) — not yet wired to the app |
+| Decision engine (MATCH/UNCERTAIN/UNKNOWN) | `IMPLEMENTED` `TESTED` (12 JVM unit tests) — not yet wired to the app |
 | Registration flow | `PLANNED` |
 | Duplicate detection | `PLANNED` |
 | Latency measurement | `PLANNED` |
 
 ## What is currently being worked on?
 
-M1 — Android project scaffolding: Gradle module, `fetchModels` task, ONNX Runtime session
-loading, and a one-off shape dump of both models to confirm tensor layout before any
-decoding code is written.
+M2 — vertical slice: CameraX capture, SCRFD decoding (layout now confirmed, see Phase 1
+report E1), 5-point alignment, embedding, and wiring the tested matcher and decision engine.
 
 ## What works?
 
-Only the toolchain so far. `adb 1.0.41`, `emulator 37.1.11.0`, `build-tools 36.0.0`,
-`platforms;android-36`, and the `google_apis;x86_64` system image are all installed and
-respond to version queries. **Nothing has been built or run yet.**
+- The app builds and runs on the emulator. Both ONNX models load and execute on-device
+  (`MEASURED` on the emulator: detector warm run 181 ms at 640x640, embedder 21 ms; these are
+  **not** phone figures).
+- Matcher + decision engine pass 22/22 JVM unit tests.
+- **No face has been detected or recognised yet**: no camera, no detector decoding.
 
 ## What doesn't work?
 
-Nothing is known broken — nothing is built yet. No AVD has been created, so the
-webcam-backed camera path is `PLANNED` and entirely unverified.
+Nothing known broken. The webcam-backed camera path is configured but not yet exercised.
 
 ## What decisions have been made?
 
@@ -68,18 +69,17 @@ In brief:
 
 | Blocker | Impact | Owner |
 |---|---|---|
-| First push to `origin` (public repo `jasgithub101/Patrick`) awaits user confirmation: commit metadata would publish the author email | Nothing is on GitHub yet | User decision |
-| AVD not yet created; WHPX may need enabling from an elevated prompt (AMD CPU, so no HAXM) | Emulator testing cannot start | Next step |
+| No physical Android phone (user is asking their professor) | Latency cannot be measured on real hardware; emulator numbers are not representative | User |
 
-Neither blocks M1.
+It does not block M2-M5.
 
 ## What should happen next?
 
-1. Create the Android app module and Gradle build files.
-2. Add the `fetchModels` task and verify `buffalo_sc.zip` extracts correctly.
-3. Build a debug APK — first proof the toolchain actually compiles something.
-4. Create the AVD with `hw.camera.front=webcam0` and boot it.
-5. Load both ONNX models and **dump their input/output shapes** before writing any decoder.
+1. CameraX preview + still capture (front camera = webcam on the emulator).
+2. SCRFD decoder + NMS in Kotlin, bound by output index (layout in Phase 1 report E1).
+3. 5-point Umeyama alignment to 112x112, then embedding.
+4. Wire into the tested matcher and decision engine with a tiny in-memory gallery.
+5. First webcam session with the user (the first point where their involvement is needed).
 
 ## Important finding so far
 

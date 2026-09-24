@@ -189,6 +189,10 @@ Date:               2026-09-24
 How it was installed:
                     git init; git config user.email ...; git config user.name ...
                     Repository-LOCAL config only - the GLOBAL git config was NOT modified.
+                    user.email = 93384756+jasgithub101@users.noreply.github.com (GitHub's
+                    private-email address) because the repo is public. The two pre-push
+                    commits were rewritten to this address before the first push.
+Remote:             origin = https://github.com/jasgithub101/Patrick.git (public)
 How to remove it:   Delete the .git directory
 Current status:     Active
 Classification:     PROJECT-INSTALLED (repo); global git config untouched
@@ -266,6 +270,55 @@ the first `graphify update` were both **denied by the auto-mode safety classifie
 self-modification**. They await a user decision. `.claude/settings.json` is intentionally
 left uncommitted until then.
 
+### 2.8 Gradle distribution, caches and wrapper
+
+```
+Component:          Gradle 8.14.3 (via wrapper) + dependency caches
+Reason:             Build tool for the Android project.
+Installed by:       Phase 1 (M1)
+Date:               2026-09-24
+How it was installed:
+                    Official gradle-8.14.3-bin.zip downloaded to the session scratchpad,
+                    SHA-256 verified against services.gradle.org
+                    (bd711022...2c5f3531), used ONCE to generate gradlew/gradlew.bat/
+                    gradle-wrapper.jar in an empty temp dir. The wrapper then downloaded
+                    its own copy into ~/.gradle/wrapper/dists on the first build.
+Locations:          C:\Users\jassu\.gradle  (wrapper dist, AGP/Kotlin/AndroidX caches, daemon)
+                    Scratchpad copy of the distribution is temporary, outside the repo.
+How to remove it:   Delete C:\Users\jassu\.gradle - shared by ALL Gradle projects; see CLEANUP.md
+Current status:     Active
+Classification:     PROJECT-INSTALLED (no ~/.gradle existed at baseline)
+```
+
+### 2.9 Android Virtual Device
+
+```
+Component:          AVD `patrick_api36`
+Version:            Pixel 7 profile, system-images;android-36;google_apis;x86_64
+Settings changed from defaults:
+                    hw.camera.front=webcam0 (the laptop's Integrated Camera)
+                    hw.camera.back=virtualscene, hw.ramSize=4096, hw.keyboard=yes,
+                    hw.gpu.enabled=yes, hw.gpu.mode=auto
+Acceleration:       `emulator -accel-check` -> "WHPX(10.0.26200) is installed and usable".
+                    No Windows feature change or admin step was needed.
+Installed by:       Phase 1 (M1)
+Date:               2026-09-24
+Location:           C:\Users\jassu\.android\avd\patrick_api36.avd (+ patrick_api36.ini)
+How to remove it:   avdmanager delete avd -n patrick_api36
+Current status:     Active
+Classification:     PROJECT-INSTALLED (C:\Users\jassu\.android is created by the SDK tools)
+```
+
+### 2.10 Model zip cache
+
+```
+Component:          buffalo_sc.zip download cache
+Location:           <repo>/.cache/models/buffalo_sc.zip (14.97 MB, gitignored)
+Extracted models:   app/build/generated/... (build output; recreated by the build)
+How to remove it:   Delete <repo>/.cache
+Classification:     PROJECT-INSTALLED
+```
+
 ---
 
 ## 3. Project-local dependencies (not system installations)
@@ -277,13 +330,17 @@ with the project directory plus the Gradle cache.
 |---|---|---|
 | Android Gradle Plugin | 8.13.2 | Android build |
 | Gradle (via wrapper) | 8.14.3 | Build tool; downloaded to `~/.gradle`, not installed system-wide |
-| Kotlin | 2.1.21 | Language / compiler |
-| KSP | 2.1.21-2.0.2 | Room annotation processing |
+| Kotlin | 2.2.20 | Language / compiler |
+| KSP | 2.2.20-2.0.3 | Room annotation processing (pinned, not yet applied) |
 | ONNX Runtime Android | 1.30.0 | On-device inference for detector + embedder |
-| CameraX | 1.6.2 | Camera capture |
-| Room | 2.8.5 | SQLite persistence |
-| Jetpack Compose | BOM 2026.09.00 | UI |
-| DataStore Preferences | 1.2.1 | Configurable thresholds |
+| CameraX | 1.5.1 | Camera capture (pinned, not yet used) |
+| Room | 2.8.3 | SQLite persistence (pinned, not yet used) |
+| Jetpack Compose | BOM 2025.10.01 | UI |
+| AndroidX core / activity / lifecycle | 1.17.0 / 1.11.0 / 2.9.4 | App framework |
+| kotlinx-coroutines | 1.10.2 | Background work |
+| DataStore Preferences | 1.1.7 | Configurable thresholds (pinned, not yet used) |
+
+Why these versions rather than the newest: see `docs/PHASE_1_REPORT.md` decision D11.
 
 Gradle's own caches live in `C:\Users\jassu\.gradle` — see `CLEANUP.md`.
 
@@ -293,10 +350,10 @@ Gradle's own caches live in `C:\Users\jassu\.gradle` — see `CLEANUP.md`.
 
 | File | Size | Source | Status |
 |---|---|---|---|
-| `det_500m.onnx` | 2.52 MB | InsightFace `buffalo_sc.zip`, release v0.7 | Fetched by the `fetchModels` Gradle task into `app/src/main/assets/models/`; **gitignored** |
+| `det_500m.onnx` | 2.52 MB | InsightFace `buffalo_sc.zip`, release v0.7 | Fetched and SHA-256-verified by `fetch<Variant>Models`; zip cached in `.cache/`, extracted into `app/build/` as a generated assets dir; never committed |
 | `w600k_mbf.onnx` | 13.62 MB | same | same |
 
-Removed by deleting `app/src/main/assets/models/`. Not committed to git.
+Removed by deleting `.cache/` and `app/build/`. Licence: **non-commercial research only**.
 
 ---
 
@@ -315,4 +372,5 @@ Removed by deleting `app/src/main/assets/models/`. Not committed to git.
 | 2026-09-24 | Baseline recorded. JDK 17, Android cmdline-tools, SDK licences installed. SDK component install started. |
 | 2026-09-24 | SDK components verified installed (API 36, build-tools 36.0.0, emulator 37.1.11.0, platform-tools 37.0.1). |
 | 2026-09-24 | Project `.venv` created; Graphify 0.9.67 installed into it and registered project-scoped. Hook path issue open. |
+| 2026-09-24 | Gradle 8.14.3 wrapper generated; first successful build; AVD `patrick_api36` created and booted (WHPX usable). |
 | 2026-09-24 | User removed Graphify hooks (`.claude/settings.json`). Initial graph built. Git remote `origin` added (public repo `jasgithub101/Patrick`); not yet pushed. |
