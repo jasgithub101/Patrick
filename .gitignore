@@ -1,0 +1,37 @@
+# Android / Gradle
+*.iml
+.gradle/
+build/
+local.properties
+.cxx/
+captures/
+.externalNativeBuild/
+
+# IDE
+.idea/
+*.hprof
+
+# Keystores
+*.jks
+*.keystore
+
+# Model assets are fetched by the `fetchModels` Gradle task, not committed.
+# See README.md. Provenance: InsightFace v0.7 release, buffalo_sc.zip.
+app/src/main/assets/models/*.onnx
+
+# Dataset staging produced by tools/prepare_dataset.py (large, derived from LFW)
+tools/dataset_out/
+tools/.cache/
+
+# Python helper
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Graphify output - regenerable with: ./.venv/Scripts/graphify.exe update .
+graphify-out/
