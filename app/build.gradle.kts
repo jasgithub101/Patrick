@@ -46,6 +46,10 @@ android {
     androidResources { noCompress += "onnx" }
 
     testOptions { unitTests.isReturnDefaultValues = true }
+
+    // Real-face instrumented tests read the LFW eval set produced by tools/prepare_dataset.py.
+    // It lives in the gitignored .cache/ and is never committed (public repo).
+    sourceSets["androidTest"].assets.srcDir(rootProject.file(".cache/lfw/eval_small"))
 }
 
 kotlin {
@@ -62,6 +66,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.onnxruntime.android)
+    implementation(libs.mlkit.face.detection)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -12,10 +12,22 @@ data class Box(val x1: Float, val y1: Float, val x2: Float, val y2: Float) {
  * order: left eye, right eye, nose tip, left mouth corner, right mouth corner, where "left" and
  * "right" are as seen in the image.
  */
-class DetectedFace(val box: Box, val landmarks: FloatArray, val score: Float) {
+class DetectedFace(
+    val box: Box,
+    val landmarks: FloatArray,
+    /** Detector confidence, or NaN when the detector does not expose one (ML Kit). */
+    val score: Float,
+    /** Head rotation in degrees, when the detector provides it (ML Kit does). */
+    val yaw: Float? = null,
+    val pitch: Float? = null,
+    val roll: Float? = null,
+) {
     init { require(landmarks.size == 10) { "expected 5 landmark points" } }
 
     fun point(i: Int): Pair<Float, Float> = landmarks[2 * i] to landmarks[2 * i + 1]
+
+    /** False when the detector could not locate all 5 points (they are then NaN). */
+    val hasLandmarks: Boolean get() = landmarks.none { it.isNaN() }
 
     /** Distance between the eye centres, in pixels; the main face-size measure. */
     val interOcularDistance: Float
@@ -27,6 +39,6 @@ class DetectedFace(val box: Box, val landmarks: FloatArray, val score: Float) {
 }
 
 interface FaceDetector : AutoCloseable {
-    /** All faces above the detector's confidence threshold, highest score first. */
+    /** All detected faces, most prominent (largest) first. */
     fun detect(image: RgbImage): List<DetectedFace>
 }

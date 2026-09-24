@@ -123,6 +123,50 @@ Future:     The ML Kit vs SCRFD alignment difference is a measurable experiment 
             becomes a bottleneck.
 ```
 
+**D2 REVISED 2026-09-24 — detector switched to Google ML Kit (user decision).**
+
+```text
+Why:        Four attempts to write the hand-written SCRFD decoder failed: responses were
+            stopped by an automated safety check or tool calls arrived truncated. No
+            reason was given, and none is assumed here. The user chose option (c)'s
+            direction: ML Kit now, SCRFD possibly later.
+Selected:   com.google.mlkit:face-detection 16.1.7 (bundled model, on-device).
+Trade-offs: - ML Kit landmarks (eyes, NOSE_BASE, mouth corners) do not match the
+              5-point convention the ArcFace-family embedder was trained on. The accuracy
+              cost is ASSUMED, not measured; it can be measured later against SCRFD.
+            - ML Kit exposes no detection confidence score.
+            - Android-only: real-face tests move from JVM to instrumented tests on the
+              emulator.
+            - Gains head Euler angles (yaw/pitch/roll) for the pose quality check.
+Privacy:    OBSERVED from Google's ML Kit data-disclosure page (checked 2026-09-24):
+            ML Kit does NOT send images, face data or inference results, but it DOES
+            send diagnostics: per-installation identifiers, performance metrics, device
+            model/OS, package name/version, event types, error codes. No opt-out is
+            documented. The POM confirms a telemetry transport dependency
+            (transport-backend-cct). Acceptable for Phase 1 (no real patient data);
+            MUST be revisited before any real deployment. SCRFD has no such traffic.
+Unchanged:  det_500m.onnx is still fetched but unused by the pipeline. SCRFD remains a
+            candidate for a later comparison experiment.
+```
+
+### D13 — Build order: camera moved to the end of Phase 1
+
+```text
+Decision:   When to build the camera path
+Options:    (a) spec order: Camera first in the vertical slice  (b) images first, camera last
+Selected:   (b), user decision 2026-09-24. This is a deliberate deviation from the spec's
+            "Camera -> Face Detection -> ..." build order.
+Reason:     Detection, alignment, embedding, matching, decisions, database, duplicate
+            detection and the 100-person gallery can all be built and tested on image
+            files (the LFW sets). The camera adds nothing to verifying them, and testing it
+            properly needs the user present.
+Trade-offs: Camera-specific problems (frame format conversion, rotation, front-camera
+            mirroring) surface later. They are well-known and considered low risk.
+Constraint: Phase 1 cannot be CLOSED without the camera path. The success criteria require
+            live capture and identification. Preferred: test the camera directly on the
+            physical phone; fall back to the emulator webcam if the phone is delayed.
+```
+
 ### D3 — Embedding model
 
 ```text
@@ -318,6 +362,7 @@ Not applicable yet.
 | P5 | `graphify install --project` writes hooks calling bare `graphify`, which is not on PATH (it lives in `.venv`) | Resolved |
 | P6 | Fixing P5 by editing `.claude/settings.json`, and running the first `graphify update .`, were both denied by the auto-mode safety classifier as self-modification | Resolved by user decision |
 | P7 | `local.properties` written with `sdk.dir=C\:\Users\...`: the shell collapsed the doubled backslashes, and Java properties treats `\` as an escape, so the path would have resolved wrongly | Resolved: forward slashes (`C:/Users/jassu/Android/Sdk`) |
+| P11 | Writing the SCRFD decoder failed 4 times: 2 responses stopped by an automated safety check, others truncated mid-file or tool calls with missing parameters. Partial files were deleted so the build stayed green | Closed by user decision: detector switched to ML Kit (D2 revised). Recorded as a failed approach |
 | P10 | `move_to_cloud` refused: "This account has no cloud environment yet" | Closed by user decision: stay local |
 | P9 | Second build failed: `Unresolved reference: net` / `nio` in `app/build.gradle.kts`. Inside a Gradle Kotlin script `java` resolves to the `java {}` project extension, so `java.net.URI` is not the JDK package | Resolved with top-level `import java.net.URI` etc. |
 | P8 | First `assembleDebug` failed: `settings.gradle.kts:5 Illegal escape: '\.'`. The regex `"com\\.android.*"` lost a backslash when written through a bash heredoc, and a Python fix through bash lost it again | Resolved: Kotlin raw strings `"""com\.android.*"""`, written with an exact-edit tool. Lesson: don't write backslash-heavy source through the shell |

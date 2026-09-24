@@ -22,7 +22,7 @@ Status vocabulary used throughout the docs:
 | Gradle build (wrapper 8.14.3, AGP 8.13.2, Kotlin 2.2.20) + `fetch<Variant>Models` task | `IMPLEMENTED` `TESTED` — `assembleDebug` succeeds; model checksums verified |
 | Android app module (M1 model-inspector screen) | `IMPLEMENTED` `TESTED` on emulator |
 | AVD `patrick_api36` (webcam0 front camera, WHPX) | `IMPLEMENTED` `TESTED` — boots, app installs and runs |
-| Face detection (SCRFD) | `PLANNED` |
+| Face detection (ML Kit; SCRFD attempt abandoned, report P11) | `PLANNED` |
 | Face embedding (MobileFaceNet) | `PLANNED` |
 | Room database | `PLANNED` |
 | Similarity search (brute-force cosine, per-person max / mean-top-2, model-version guard) | `IMPLEMENTED` `TESTED` (10 JVM unit tests) — not yet wired to the app |
@@ -36,8 +36,9 @@ Status vocabulary used throughout the docs:
 **Where:** locally on the laptop. A cloud-session move was attempted, but the account has no
 cloud environment, and the user chose to continue locally.
 
-M2 — vertical slice: CameraX capture, SCRFD decoding (layout now confirmed, see Phase 1
-report E1), 5-point alignment, embedding, and wiring the tested matcher and decision engine.
+M2, image-based: ML Kit face detection (switched from SCRFD, report D2 revised), alignment,
+embedding, and wiring the tested matcher and decision engine. The camera moved to the end of
+the phase (report D13).
 
 ## What works?
 
@@ -78,11 +79,19 @@ It does not block M2-M5.
 
 ## What should happen next?
 
-1. CameraX preview + still capture (front camera = webcam on the emulator).
-2. SCRFD decoder + NMS in Kotlin, bound by output index (layout in Phase 1 report E1).
-3. 5-point Umeyama alignment to 112x112, then embedding.
-4. Wire into the tested matcher and decision engine with a tiny in-memory gallery.
-5. First webcam session with the user (the first point where their involvement is needed).
+Revised build order (report D13: images first, camera last):
+
+1. **M2 (image-based slice):** ML Kit detection, 5-point alignment to 112x112, MobileFaceNet
+   embedding, matcher and decision engine. Tested on the LFW eval set with instrumented tests
+   on the emulator. No camera and no user involvement.
+2. **M3:** Room database, multi-embedding registration (default 5, configurable), dummy ABHA IDs,
+   persistence across restarts.
+3. **M4:** quality checks (no face, multiple faces, too small, blur, lighting, pose from ML Kit
+   head angles); thresholds configurable at runtime.
+4. **M5:** bulk-enrol the 100-person LFW gallery; duplicate-registration warning; scripted probe
+   run with per-stage timings.
+5. **M6 (last):** CameraX + guided registration/identify UI. Tested on the physical phone if
+   available, otherwise the emulator webcam. **Phase 1 cannot close without this.**
 
 ## Important finding so far
 
