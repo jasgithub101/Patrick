@@ -1,0 +1,14 @@
+# Normalise text to LF in the repo so the project builds identically on Windows and Linux
+# (e.g. a later cloud session). Windows-only scripts keep CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+gradlew text eol=lf
+
+# Binaries
+*.jar binary
+*.onnx binary
+*.png binary
+*.jpg binary
+*.webp binary
+*.parquet binary

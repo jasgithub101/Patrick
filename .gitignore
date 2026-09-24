@@ -15,9 +15,9 @@ captures/
 *.jks
 *.keystore
 
-# Model assets are fetched by the `fetchModels` Gradle task, not committed.
-# See README.md. Provenance: InsightFace v0.7 release, buffalo_sc.zip.
-app/src/main/assets/models/*.onnx
+# Model zip cache for the fetch<Variant>Models Gradle task (models are never committed).
+# Provenance: InsightFace v0.7 release, buffalo_sc.zip. Extracted models go to app/build/.
+.cache/
 
 # Dataset staging produced by tools/prepare_dataset.py (large, derived from LFW)
 tools/dataset_out/
