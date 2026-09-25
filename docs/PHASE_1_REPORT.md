@@ -97,7 +97,10 @@ Status per component is tracked in section 6. Matcher and decision engine are `I
 | FaceQualityChecker (7 gates, actionable messages, prominence-based face choice) | `IMPLEMENTED` `TESTED` `MEASURED` — E3, E4 |
 | RecognitionPipeline (detect -> quality -> align -> embed, per-stage timings) | `IMPLEMENTED` `TESTED` |
 | Runtime-configurable settings (DataStore) | `IMPLEMENTED` — not yet exposed in a UI |
-| Camera + UI | `PLANNED` (M6, last — D13) |
+| CameraX capture (live preview, still capture, rotation handling) | `IMPLEMENTED` `TESTED` on emulator (E5) |
+| Compose demo UI (Home, Register, Identify, Employees, Technical Details) | `IMPLEMENTED` `TESTED` on emulator (E5) |
+| RecognitionEngine facade (UI touches nothing else) | `IMPLEMENTED` `TESTED` |
+| Bulk 100-person enrolment + search latency at scale | `PLANNED` (M5, now last) |
 
 ## 7. Technical Decisions
 
@@ -175,6 +178,34 @@ Trade-offs: Camera-specific problems (frame format conversion, rotation, front-c
 Constraint: Phase 1 cannot be CLOSED without the camera path. The success criteria require
             live capture and identification. Preferred: test the camera directly on the
             physical phone; fall back to the emulator webcam if the phone is delayed.
+```
+
+### D18 — Demo UI brought forward ahead of the 100-person gallery
+
+```text
+Decision:   Build the demo UI (M6) before the bulk gallery (M5)
+Reason:     The user needs a presentable demo for their professor. The UI depends only on the
+             pipeline, which M2-M4 already completed and tested, so the order is safe.
+Also:       Android Studio was installed at the same time (ENVIRONMENT.md 2.11). It is NOT
+             required to build: the command-line toolchain still produces the APK, and Studio
+             was pointed at the existing SDK, JDK, AVD and Gradle wrapper rather than
+             installing duplicates.
+Consequence: M5 (bulk 100-person enrolment and search latency at scale) is now the last
+             engineering task before Phase 1 closeout.
+```
+
+### D19 — UI is a presentation layer only
+
+```text
+Decision:   How the UI reaches the recognition pipeline
+Selected:   A single RecognitionEngine facade in the app package. Screens and ViewModels call
+            it and nothing else.
+Reason:     CLAUDE.md section 2 requires recognition logic to stay out of the UI. No screen
+            imports ONNX Runtime, Room or the matcher; no screen contains a threshold. Every
+            number displayed is returned by the pipeline for that specific attempt.
+Trade-offs: One more indirection layer. Worth it: the UI can be replaced, and the engine stays
+            testable without any UI.
+Explicitly NOT done: no mock recognition, no hardcoded similarity, employee or latency values.
 ```
 
 ### D3 — Embedding model
@@ -585,6 +616,60 @@ Conclusion:   The gates behave as intended on real data, and rejection provably 
               Latency is an EMULATOR figure and is NOT evidence about the 2 s phone target.
 ```
 
+### E5 — Demo UI and camera path on the emulator (M6, brought forward)
+
+```text
+Experiment:  Verify the demo UI drives the REAL recognition pipeline end to end, with a live
+             camera, and that every value on screen is measured rather than hardcoded.
+Why now:     The user needs a presentable demo for their professor, so M6 (UI + camera) was
+             brought forward ahead of M5 (100-person gallery). See D18.
+Configuration: AVD patrick_api36 with hw.camera.front=webcam0 (the laptop webcam feeds the
+             emulator's front camera); debug APK; ML Kit + w600k_mbf@9cc6e4a7.
+Method:      Driven through adb (taps and uiautomator dumps), reading the on-screen values back.
+
+RESULT (MEASURED 2026-09-25):
+
+  Live camera preview      WORKS. CameraX binds the front camera and the webcam feed renders in
+                           the Compose preview on both Register and Identify.
+  Registration             WORKS end to end on a real face:
+                             5 of 5 samples captured and accepted through the real pipeline
+                             measured quality scores 0.760 and 0.678 (per-sample, real values)
+                             saved as "Demo" with dummy id DUMMY-42881341226468
+                             5 embeddings persisted; home screen then showed "Registered
+                             Employees (1)" read from the database
+  Guided capture           Prompts advance per sample (frontal, left, right, neutral, natural)
+                           and the capture button correctly stops at 5 of 5.
+  Identification           Ran the real pipeline against the live camera with no person in
+                           frame. Correctly returned UNCERTAIN / "No face detected. Point the
+                           camera at the person." in 1493 ms.
+                           A MATCH against a registered face was NOT verified: it needs a person
+                           in front of the camera, which the agent cannot arrange. PENDING.
+  Technical Details panel  Every field real, read back from the running app:
+                             detector, alignment, model w600k_mbf@9cc6e4a7, dims 512
+                             registered people 1, stored embeddings 5   (live DB counts)
+                             decision UNCERTAIN (LOW_QUALITY), rejected because NO_FACE
+                             thresholds 0.350 / 0.100 / 0.100  (the calibrated M4 values)
+                             detect 1493 ms, quality 0, align 0, embed 0, search 0, total 1493
+  Short-circuit proof      align = embed = 0 ms on a rejected frame, visible in the UI, matching
+                           the assertion in the instrumented tests: a rejected image is never
+                           aligned or embedded.
+
+Latency note: detection on a full-resolution camera frame took about 1.5 s on the emulator,
+             far above the 59 ms measured on 250x250 LFW images (E4). Expected: ML Kit in
+             ACCURATE mode scales with input resolution, and this is an x86 emulator. It is NOT
+             evidence about phone latency, but it does suggest downscaling the frame before
+             detection is worth measuring (deferred to Phase 2).
+
+Problem found: the soft keyboard covered the Save button, so registration could not be completed
+             until the keyboard was dismissed. A real usability bug, not a test artefact. Fixed
+             with imePadding plus windowSoftInputMode=adjustResize, and reinstalled.
+
+Conclusion:  The UI is a presentation layer over the existing pipeline; it contains no
+             recognition logic and no mock data. Registration, quality rejection, persistence
+             and the technical panel are verified on a live camera. MATCH / UNKNOWN against a
+             live face remain to be demonstrated by the user.
+```
+
 ## 9. Performance
 
 `MEASURED` on the **emulator only** (E1, E2). Emulator timings run on an x86 laptop CPU and are
@@ -640,6 +725,7 @@ more comparisons (Phase 2/3). The observed separation is a property of this smal
 | P5 | `graphify install --project` writes hooks calling bare `graphify`, which is not on PATH (it lives in `.venv`) | Resolved |
 | P6 | Fixing P5 by editing `.claude/settings.json`, and running the first `graphify update .`, were both denied by the auto-mode safety classifier as self-modification | Resolved by user decision |
 | P7 | `local.properties` written with `sdk.dir=C\:\Users\...`: the shell collapsed the doubled backslashes, and Java properties treats `\` as an escape, so the path would have resolved wrongly | Resolved: forward slashes (`C:/Users/jassu/Android/Sdk`) |
+| P13 | The soft keyboard covered the Save button on the registration screen, so registration could not be completed while the keyboard was open | Fixed: `imePadding()` on the scrollable screens plus `windowSoftInputMode="adjustResize"` |
 | P12 | Writing the ONNX embedding wrapper failed the same way (safety check / truncated writes). Worked around by splitting the file into small appended chunks after the user supplied the code | Resolved; see D14 |
 | P11 | Writing the SCRFD decoder failed 4 times: 2 responses stopped by an automated safety check, others truncated mid-file or tool calls with missing parameters. Partial files were deleted so the build stayed green | Closed by user decision: detector switched to ML Kit (D2 revised). Recorded as a failed approach |
 | P10 | `move_to_cloud` refused: "This account has no cloud environment yet" | Closed by user decision: stay local |
@@ -703,7 +789,7 @@ What the system still cannot do, as of 2026-09-25:
 [x] Models fetched (checksum-verified) and loaded on the emulator; tensor shapes dumped (E1)
 [x] Decision engine + brute-force matcher implemented; 22/22 JVM unit tests pass
     (incl. the different-person runner-up rule and the cross-model-version guard)
-[ ] Camera input                      <- moved to end of phase (D13)
+[x] Camera input                      CameraX live preview + still capture (E5)
 [x] Face detection                    ML Kit; 70/70 eval images, E2
 [x] Face alignment                    5-point similarity to ArcFace template
 [x] Embedding generation              w600k_mbf, 512-d, L2-normalised, E2

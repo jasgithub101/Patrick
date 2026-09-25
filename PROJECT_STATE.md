@@ -4,7 +4,7 @@ Short, always-current state of the project. Updated continuously.
 
 **Last updated:** 2026-09-24
 **Current phase:** Phase 1 — on-device face identification prototype
-**Current milestone:** M5 (100-person gallery) — M0-M4 complete
+**Current milestone:** M5 (100-person gallery) — M0-M4 and M6 (demo UI) complete
 
 Status vocabulary used throughout the docs:
 `PLANNED` · `IMPLEMENTED` · `TESTED` · `MEASURED` · `OBSERVED` · `ASSUMED` · `DEFERRED`
@@ -32,14 +32,17 @@ Status vocabulary used throughout the docs:
 | Quality checks (7 gates, actionable messages) | `IMPLEMENTED` `TESTED` `MEASURED` |
 | Runtime-configurable thresholds (DataStore) | `IMPLEMENTED` — no UI yet |
 | Per-stage latency measurement | `IMPLEMENTED` `MEASURED` (emulator only) |
+| CameraX live preview + capture | `IMPLEMENTED` `TESTED` on emulator |
+| Compose demo UI (4 screens + Technical Details) | `IMPLEMENTED` `TESTED` on emulator |
+| Android Studio 2026.1.4.7 | Installed; reuses existing SDK/JDK/AVD. **Not yet launched** |
 
 ## What is currently being worked on?
 
 **Where:** locally on the laptop. A cloud-session move was attempted, but the account has no
 cloud environment, and the user chose to continue locally.
 
-**M4 is complete.** Next is M5: bulk-enrol the ~100-person LFW gallery, then run a scripted probe
-pass over it to measure search latency and recognition behaviour at that scale.
+**M4 and the M6 demo UI are complete.** Next is M5: bulk-enrol the ~100-person LFW gallery and
+measure search latency at that scale. After that, Phase 1 closeout.
 
 ## What works?
 
@@ -58,6 +61,10 @@ pass over it to measure search latency and recognition behaviour at that scale.
   ordinary photos.
 - **Full pipeline latency on the emulator: 94 ms** (detect 59, quality 7, align 14, embed 14).
   Not a phone figure.
+- **A working demo app**: live camera preview, guided 5-sample registration, identification with
+  MATCH / UNCERTAIN / UNKNOWN, an employee list, and an expandable Technical Details panel.
+  Registration verified end to end on a real face (report E5): 5 samples accepted with measured
+  quality 0.760 and 0.678, saved as DUMMY-42881341226468.
 - **91 tests pass** (62 JVM + 29 instrumented), 0 failures.
 - Emulator latency: detection 88 ms median, embedding 15 ms median. **Not** phone figures.
 - **Not yet built:** quality checks (M4), bulk 100-person enrolment (M5), camera and UI (M6).
@@ -66,8 +73,14 @@ pass over it to measure search latency and recognition behaviour at that scale.
 
 Nothing known broken. Untested: the camera path (M6).
 
-Known rough edge: an over-exposed face is rejected as "no face detected" rather than "move out of
-direct light", because the detector fails before the brightness gate (E4).
+**Not yet demonstrated: a live MATCH.** Registration and rejection are verified on camera, but
+confirming a MATCH against a real face needs someone in front of the camera.
+
+Known rough edges:
+- An over-exposed face is rejected as "no face detected" rather than "move out of direct light",
+  because the detector fails before the brightness gate (E4).
+- Detection on a full-resolution camera frame took about 1.5 s on the emulator versus 59 ms on
+  small LFW images. Worth downscaling before detection; deferred to Phase 2.
 
 The placeholder `matchThreshold` of 0.5 is **too high** for this model: E2 shows it would
 false-reject a genuine probe scoring 0.441. Thresholds stay uncalibrated until Phase 2/3.

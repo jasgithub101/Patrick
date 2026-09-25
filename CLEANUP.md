@@ -41,6 +41,8 @@ changes. It is maintained continuously so that cleanup is never reconstructed fr
 | Component | Location | Approx size |
 |---|---|---|
 | Eclipse Temurin JDK 17.0.20.1 | `C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot` | ~300 MB |
+| Android Studio 2026.1.4.7 | `C:\Program Files\Android\Android Studio` | ~3.3 GB |
+| Android Studio settings and caches | `%APPDATA%\Google\AndroidStudio*`, `%LOCALAPPDATA%\Google\AndroidStudio*` | varies |
 | Android SDK (all components) | `C:\Users\jassu\Android\Sdk` | ~5.8 GB |
 | Android SDK licence files | `C:\Users\jassu\Android\Sdk\licenses` | 11 KB |
 | Gradle distribution + caches | `C:\Users\jassu\.gradle` | ~1–2 GB once built |
@@ -56,7 +58,7 @@ changes. It is maintained continuously so that cleanup is never reconstructed fr
 
 | Component | Modification | How to revert |
 |---|---|---|
-| (none so far) | | |
+| `ANDROID_HOME` (USER env var) | Set to `C:\Users\jassu\Android\Sdk` so Android Studio reuses the existing SDK instead of downloading a second one (~5.8 GB). No pre-existing value was overwritten, and the MACHINE-level variable was verified still empty. | Clear it, see step 3c |
 
 Git identity was set **repository-locally**, not globally, so there is nothing to revert.
 
@@ -117,6 +119,25 @@ Only if no other project uses it:
 rm -rf "C:/Users/jassu/Android"
 ```
 
+### 3b. Remove Android Studio
+
+Only if it is not wanted for other projects. The project builds without it.
+
+```bash
+winget uninstall --id Google.AndroidStudio
+```
+
+Optionally remove its settings and caches afterwards (`%APPDATA%\Google\AndroidStudio*` and
+`%LOCALAPPDATA%\Google\AndroidStudio*`).
+
+### 3c. Clear the ANDROID_HOME user variable
+
+Run in PowerShell:
+
+```bash
+[Environment]::SetEnvironmentVariable('ANDROID_HOME', $null, 'User')
+```
+
 ### 4. Remove the JDK
 
 Only if nothing else on the machine needs a JDK — check first, since Java is a common
@@ -158,8 +179,11 @@ adb uninstall com.patrick.faceid
 
 ### 8. Environment variables
 
-This project set `JAVA_HOME` and `ANDROID_HOME` **per-command only**. No persistent user or
-system environment variable was created. If any were added manually later, remove them here.
+`JAVA_HOME` is set **per-command only** and leaves nothing behind.
+
+`ANDROID_HOME` **was** set persistently at USER level on 2026-09-25, so Android Studio would
+reuse the existing SDK rather than download a second one. Clear it with step 3c. The MACHINE
+(system) level was never touched and was verified empty.
 
 ---
 
@@ -183,3 +207,4 @@ The last three confirm that cleanup did not overreach.
 |---|---|
 | 2026-09-24 | Created alongside the M0 toolchain install. |
 | 2026-09-24 | Added Graphify + project `.venv` removal (step 0); corrected venv path from `tools\.venv` to `.venv`. |
+| 2026-09-25 | Added Android Studio (step 3b) and the ANDROID_HOME user variable (step 3c). Corrected the claim that no persistent env var was set. |

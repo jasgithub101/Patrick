@@ -319,6 +319,57 @@ How to remove it:   Delete <repo>/.cache
 Classification:     PROJECT-INSTALLED
 ```
 
+### 2.11 Android Studio
+
+```
+Component:          Android Studio
+Version:            2026.1.4.7 (winget package Google.AndroidStudio)
+Reason:             The user needs a professional demo UI to present to their professor, and
+                    wants the project openable in the IDE. The command-line toolchain remains
+                    fully sufficient to build and test; Studio is additive.
+Installed by:       Phase 1 (M6, demo UI)
+Date:               2026-09-25
+Required by:        Developer convenience only. NOT required by the build: the Gradle wrapper,
+                    JDK 17 and the command-line SDK build the APK without it.
+Installation method:
+                    winget install --id Google.AndroidStudio --exact --silent
+                      --accept-package-agreements --accept-source-agreements
+Install location:   C:\Program Files\Android\Android Studio   (~3.3 GB)
+Removal method:     winget uninstall --id Google.AndroidStudio
+                    Then optionally delete %APPDATA%\Google\AndroidStudio*,
+                    %LOCALAPPDATA%\Google\AndroidStudio* (settings and caches).
+Status:             Installed; not yet launched (first launch runs a GUI setup wizard).
+Origin:             PROJECT-INSTALLED
+```
+
+**No duplicate SDK, JDK or AVD was created.** Android Studio is pointed at the existing
+toolchain rather than installing its own:
+
+| Component | Reused from | How Studio finds it |
+|---|---|---|
+| Android SDK | `C:\Users\jassu\Android\Sdk` | `local.properties` (`sdk.dir`) plus the `ANDROID_HOME` user variable below |
+| JDK 17 | `C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot` | Gradle JDK setting; Studio also bundles its own JBR, which must NOT be selected |
+| Emulator / AVD | `patrick_api36` | Lives in `~/.android/avd`, shared with the command line |
+| Gradle / AGP / Kotlin | wrapper 8.14.3 / AGP 8.13.2 / Kotlin 2.2.20 | Studio uses the project's Gradle wrapper by default |
+
+### 2.12 ANDROID_HOME user environment variable
+
+```
+Component:          ANDROID_HOME environment variable
+Value:              C:\Users\jassu\Android\Sdk
+Reason:             Without it, the Android Studio setup wizard offers to download a SECOND
+                    Android SDK (~5.8 GB) into its default location. This points it at the
+                    existing one.
+Date:               2026-09-25
+Installation method:
+                    [Environment]::SetEnvironmentVariable('ANDROID_HOME', ..., 'User')
+Scope:              USER level only. The MACHINE (system) level was deliberately left empty
+                    and was verified empty after the change.
+Removal method:     [Environment]::SetEnvironmentVariable('ANDROID_HOME', $null, 'User')
+Status:             Active
+Origin:             PROJECT-MODIFIED (user environment; no pre-existing value was overwritten)
+```
+
 ---
 
 ## 3. Project-local dependencies (not system installations)
