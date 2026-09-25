@@ -51,6 +51,10 @@ android {
     // Real-face instrumented tests read the LFW eval set produced by tools/prepare_dataset.py.
     // It lives in the gitignored .cache/ and is never committed (public repo).
     sourceSets["androidTest"].assets.srcDir(rootProject.file(".cache/lfw/eval_small"))
+    // The ~100-person bulk gallery ships as a test asset under "bulk/". Pushing it to the device
+    // instead fails: an app reinstall wipes its external files dir, and adb-pushed files are owned
+    // by the shell user, so the app cannot read them.
+    sourceSets["androidTest"].assets.srcDir(rootProject.file("tools/dataset_out"))
 }
 
 kotlin {

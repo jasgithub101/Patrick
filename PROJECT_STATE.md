@@ -4,7 +4,7 @@ Short, always-current state of the project. Updated continuously.
 
 **Last updated:** 2026-09-24
 **Current phase:** Phase 1 — on-device face identification prototype
-**Current milestone:** M5 (100-person gallery) — M0-M4 and M6 (demo UI) complete
+**Current milestone:** Phase 1 closeout — M0-M6 all complete
 
 Status vocabulary used throughout the docs:
 `PLANNED` · `IMPLEMENTED` · `TESTED` · `MEASURED` · `OBSERVED` · `ASSUMED` · `DEFERRED`
@@ -41,8 +41,8 @@ Status vocabulary used throughout the docs:
 **Where:** locally on the laptop. A cloud-session move was attempted, but the account has no
 cloud environment, and the user chose to continue locally.
 
-**M4 and the M6 demo UI are complete.** Next is M5: bulk-enrol the ~100-person LFW gallery and
-measure search latency at that scale. After that, Phase 1 closeout.
+**All milestones M0-M6 are complete.** What remains is Phase 1 closeout: a live MATCH
+demonstrated on camera by the user, and the final report.
 
 ## What works?
 
@@ -65,7 +65,9 @@ measure search latency at that scale. After that, Phase 1 closeout.
   MATCH / UNCERTAIN / UNKNOWN, an employee list, and an expandable Technical Details panel.
   Registration verified end to end on a real face (report E5): 5 samples accepted with measured
   quality 0.760 and 0.678, saved as DUMMY-42881341226468.
-- **91 tests pass** (62 JVM + 29 instrumented), 0 failures.
+- **A 100-person gallery works** (report E6): 100/100 people enrolled, rank-1 228/228 on
+  held-out probes, 0 wrong matches, and all 43 stranger probes correctly refused.
+- **97 tests pass** (62 JVM + 35 instrumented), 0 failures.
 - Emulator latency: detection 88 ms median, embedding 15 ms median. **Not** phone figures.
 - **Not yet built:** quality checks (M4), bulk 100-person enrolment (M5), camera and UI (M6).
 
@@ -117,12 +119,21 @@ Revised build order (report D13: images first, camera last):
 1. ~~**M2:** ML Kit detection, alignment, embedding, matcher, decision engine.~~ **Done** (E2).
 2. ~~**M3:** Room database, multi-embedding registration, dummy ABHA IDs, persistence.~~ **Done.**
 3. ~~**M4:** quality checks and runtime-configurable thresholds.~~ **Done** (E3, E4).
-4. **M5 (next):** bulk-enrol the ~100-person LFW gallery; scripted probe run measuring search
-   latency and recognition at that scale. (Duplicate detection already landed in M3.)
-5. **M6 (last):** CameraX + guided registration/identify UI. Tested on the physical phone if
-   available, otherwise the emulator webcam. **Phase 1 cannot close without this.**
+4. ~~**M5:** bulk-enrol the ~100-person gallery and measure search at scale.~~ **Done** (E6).
+5. ~~**M6:** CameraX + guided registration/identify UI.~~ **Done** (E5), brought forward.
 
-## Important finding so far
+**To close Phase 1:** the user demonstrates a live MATCH and a live UNKNOWN on camera, then the
+final report is written. Everything else is finished.
+
+## Most important finding
+
+As the gallery grew from 10 to 100 people, the closest a stranger came to being wrongly accepted
+rose from 0.242 to **0.315**, against a match threshold of 0.35. The safety margin fell from
+0.108 to **0.035**. This is the open-set effect in action: more enrolled people means more chances
+some stranger resembles one of them. **Thresholds calibrated at one gallery size do not transfer
+to another**, which is now evidence rather than theory, and it shapes Phase 3.
+
+## Other findings
 
 The InsightFace pretrained weights chosen for Phase 1 are licensed for **non-commercial
 research only** (`OBSERVED`, InsightFace README). Fine for this prototype. It blocks any real

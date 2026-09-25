@@ -100,7 +100,7 @@ Status per component is tracked in section 6. Matcher and decision engine are `I
 | CameraX capture (live preview, still capture, rotation handling) | `IMPLEMENTED` `TESTED` on emulator (E5) |
 | Compose demo UI (Home, Register, Identify, Employees, Technical Details) | `IMPLEMENTED` `TESTED` on emulator (E5) |
 | RecognitionEngine facade (UI touches nothing else) | `IMPLEMENTED` `TESTED` |
-| Bulk 100-person enrolment + search latency at scale | `PLANNED` (M5, now last) |
+| BulkEnroller + 100-person gallery, search latency at scale | `IMPLEMENTED` `TESTED` `MEASURED` (E6) |
 
 ## 7. Technical Decisions
 
@@ -670,6 +670,83 @@ Conclusion:  The UI is a presentation layer over the existing pipeline; it conta
              live face remain to be demonstrated by the user.
 ```
 
+### E6 - The ~100-person gallery (M5)
+
+```text
+Experiment:  Build a 100-person gallery through the real pipeline, then measure recognition,
+             stranger rejection, search latency and storage at that scale.
+Configuration: ML Kit + w600k_mbf@9cc6e4a7; calibrated M4 quality gates; thresholds
+             match 0.35, margin 0.10, minQuality 0.10; duplicate warn 0.35, left ON.
+Dataset:     LFW via tools/prepare_dataset.py, deterministic: 100 enrolled identities x5 images,
+             251 held-out probes, 50 never-enrolled identities.
+Method:      BulkEnroller drives the SAME pipeline and RegistrationService as the camera flow.
+             Run on the AVD; 6 instrumented tests, all passed.
+
+RESULT (MEASURED 2026-09-25):
+
+  ENROLMENT
+    people registered            100 / 100
+    flagged as duplicate         0     -> false duplicate rate 0.000
+    images processed             500, rejected 37 (7.4 pct)
+                                 MULTIPLE_FACES 36, EXTREME_POSE 1
+    embeddings stored            463
+    wall time                    126 s total, about 1.26 s per person
+    pipeline time                113 s, about 226 ms per image
+
+  RECOGNITION (228 probes that passed the quality gates)
+    rank-1                       228 / 228  (1.000)
+    MATCH                        224 correct
+    WRONG MATCH                  0
+    UNCERTAIN                    4  (system declined rather than guessing)
+    search over the full gallery median 0 ms, p95 1 ms
+
+  STRANGERS (43 never-enrolled probes that passed the gates)
+    outcome                      43 / 43 UNKNOWN
+    false accepts                0
+    their best gallery score     mean 0.207, MAX 0.315
+
+  SEARCH SCALING (exact brute-force cosine, one query, microseconds)
+    50 embeddings    164 us
+    100 embeddings   263 us
+    200 embeddings   829 us
+    350 embeddings  1329 us
+    463 embeddings  1623 us
+
+  STORAGE
+    database         1.92 MB for 100 people / 463 embeddings
+                     about 19 KB per person, 4.1 KB per embedding
+                     raw vectors are 926 KB, so SQLite overhead is about 2x
+
+Observation:
+  1. THE HEADROOM IS SHRINKING. The closest a stranger came to being accepted was 0.315,
+     against a match threshold of 0.35 - a margin of just 0.035. At 10 people (E2) the closest
+     stranger scored 0.242, a margin of 0.108. A 10x larger gallery cut the safety margin by
+     roughly two thirds. This is the open-set effect Phase 4 predicts: more people
+     means more chances that some stranger resembles someone enrolled. Extrapolating even
+     loosely, a gallery of a few thousand would likely produce a first false accept at this
+     threshold. This is the most important number in M5.
+  2. Zero false duplicates among 100 genuinely different people, so the 0.35 duplicate warn
+     threshold is not over-firing at this scale.
+  3. 7.4 pct of enrolment images were rejected, almost all for MULTIPLE_FACES. Consistent with
+     E3, where 14 pct of LFW photos contained a second face; the prominence rule absorbs the
+     rest. Every person still had enough usable images, so nobody failed to enrol.
+  4. Search cost grows roughly linearly with gallery size, as brute force must. Linear
+     extrapolation puts 1M embeddings near 3.5 s per search on this emulator, far past the 2 s
+     budget for the whole attempt. Exact search is comfortable into the low tens of thousands
+     and needs replacing well before a million.
+  5. Storage is not a constraint. Even at 19 KB per person, a million people is about 19 GB,
+     and most of that is SQLite overhead that a packed format would remove.
+
+Conclusion:  The prototype holds up at 100 people: perfect rank-1, no wrong matches, no
+             strangers accepted. But the stranger-score headroom fell from 0.108 to 0.035 as the
+             gallery grew 10x, which is direct evidence that thresholds calibrated at one scale
+             do not transfer to another. Phase 3 must calibrate against the intended gallery
+             size, not a convenient one.
+
+             Still one dataset, one model, one emulator. LFW is not the target population, and
+             none of these numbers is a phone measurement.
+```
+
 ## 9. Performance
 
 `MEASURED` on the **emulator only** (E1, E2). Emulator timings run on an x86 laptop CPU and are
@@ -725,6 +802,8 @@ more comparisons (Phase 2/3). The observed separation is a property of this smal
 | P5 | `graphify install --project` writes hooks calling bare `graphify`, which is not on PATH (it lives in `.venv`) | Resolved |
 | P6 | Fixing P5 by editing `.claude/settings.json`, and running the first `graphify update .`, were both denied by the auto-mode safety classifier as self-modification | Resolved by user decision |
 | P7 | `local.properties` written with `sdk.dir=C\:\Users\...`: the shell collapsed the doubled backslashes, and Java properties treats `\` as an escape, so the path would have resolved wrongly | Resolved: forward slashes (`C:/Users/jassu/Android/Sdk`) |
+| P15 | `adb push` of the bulk dataset failed twice: an app reinstall wipes the external files dir, and pushed files are owned by the shell user so the app cannot read them | Resolved: the dataset ships as a test asset under `bulk/`, and BulkEnroller was refactored onto an `ImageSource` interface instead of `java.io.File` |
+| P14 | `@BeforeClass fun x() = runBlocking { ... }` is not `void` (the block returns its last expression), so JUnit refused the whole class with `Method should be void` | Resolved: block bodies rather than expression bodies |
 | P13 | The soft keyboard covered the Save button on the registration screen, so registration could not be completed while the keyboard was open | Fixed: `imePadding()` on the scrollable screens plus `windowSoftInputMode="adjustResize"` |
 | P12 | Writing the ONNX embedding wrapper failed the same way (safety check / truncated writes). Worked around by splitting the file into small appended chunks after the user supplied the code | Resolved; see D14 |
 | P11 | Writing the SCRFD decoder failed 4 times: 2 responses stopped by an automated safety check, others truncated mid-file or tool calls with missing parameters. Partial files were deleted so the build stayed green | Closed by user decision: detector switched to ML Kit (D2 revised). Recorded as a failed approach |
@@ -767,7 +846,13 @@ What the system still cannot do, as of 2026-09-25:
 - **No UI.** The only screen is the M1 model-inspector diagnostic.
 - **Thresholds are uncalibrated**, and E2 shows the placeholder 0.5 is too high: it would
   false-reject a genuine probe scoring 0.441.
-- **Only 10 identities evaluated**, not the ~100 target. No FAR/FRR estimate is possible.
+- **100 identities evaluated** (E6), but still far too few for an FAR/FRR estimate, and all from
+  one dataset.
+- **Stranger-rejection headroom is thin and shrinking**: the closest stranger scored 0.315 against
+  a 0.35 threshold (E6), down from a 0.108 margin at 10 people. Thresholds do not transfer across
+  gallery sizes.
+- **Exact search will not scale**: roughly linear growth puts 1M embeddings near 3.5 s per search
+  on the emulator. Fine to the low tens of thousands; an index is needed beyond that.
 - **No local encryption.** On the Phase 1 MVP list; DEFERRED, and now recorded rather than
   quietly dropped.
 - **No latency evidence on real hardware.** Emulator figures only; no physical phone yet.
