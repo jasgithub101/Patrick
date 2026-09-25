@@ -22,11 +22,11 @@ Status vocabulary used throughout the docs:
 | Gradle build (wrapper 8.14.3, AGP 8.13.2, Kotlin 2.2.20) + `fetch<Variant>Models` task | `IMPLEMENTED` `TESTED` — `assembleDebug` succeeds; model checksums verified |
 | Android app module (M1 model-inspector screen) | `IMPLEMENTED` `TESTED` on emulator |
 | AVD `patrick_api36` (webcam0 front camera, WHPX) | `IMPLEMENTED` `TESTED` — boots, app installs and runs |
-| Face detection (ML Kit; SCRFD attempt abandoned, report P11) | `PLANNED` |
-| Face embedding (MobileFaceNet) | `PLANNED` |
+| Face detection (ML Kit) | `IMPLEMENTED` `TESTED` `MEASURED` — 70/70 eval images, E2 |
+| Face alignment + embedding (MobileFaceNet 512-d) | `IMPLEMENTED` `TESTED` `MEASURED` — E2 |
 | Room database | `PLANNED` |
-| Similarity search (brute-force cosine, per-person max / mean-top-2, model-version guard) | `IMPLEMENTED` `TESTED` (10 JVM unit tests) — not yet wired to the app |
-| Decision engine (MATCH/UNCERTAIN/UNKNOWN) | `IMPLEMENTED` `TESTED` (12 JVM unit tests) — not yet wired to the app |
+| Similarity search (brute-force cosine, per-person max / mean-top-2, model-version guard) | `IMPLEMENTED` `TESTED` `MEASURED` — 10 JVM tests + E2 |
+| Decision engine (MATCH/UNCERTAIN/UNKNOWN) | `IMPLEMENTED` `TESTED` `MEASURED` — 12 JVM tests + E2 |
 | Registration flow | `PLANNED` |
 | Duplicate detection | `PLANNED` |
 | Latency measurement | `PLANNED` |
@@ -36,21 +36,26 @@ Status vocabulary used throughout the docs:
 **Where:** locally on the laptop. A cloud-session move was attempted, but the account has no
 cloud environment, and the user chose to continue locally.
 
-M2, image-based: ML Kit face detection (switched from SCRFD, report D2 revised), alignment,
-embedding, and wiring the tested matcher and decision engine. The camera moved to the end of
-the phase (report D13).
+**M2 is complete** (image-based). The full recognition pipeline runs end to end on real LFW
+faces: see report E2. Next is M3, the Room database and registration workflow.
 
 ## What works?
 
-- The app builds and runs on the emulator. Both ONNX models load and execute on-device
-  (`MEASURED` on the emulator: detector warm run 181 ms at 640x640, embedder 21 ms; these are
-  **not** phone figures).
-- Matcher + decision engine pass 22/22 JVM unit tests.
-- **No face has been detected or recognised yet**: no camera, no detector decoding.
+- **Recognition works end to end on real faces** (`MEASURED`, emulator, report E2):
+  10 enrolled identities x 5 images, rank-1 **10/10** correct on held-out probes, and
+  **0 false matches** on 10 never-enrolled people. Same-person similarity mean 0.623 vs
+  different-person mean 0.029, with no overlap on this small set.
+- 22/22 JVM unit tests and 5/5 instrumented tests pass.
+- Emulator latency: detection 88 ms median, embedding 15 ms median. **Not** phone figures.
+- **Not yet built:** database, registration, quality checks, camera.
 
 ## What doesn't work?
 
-Nothing known broken. The webcam-backed camera path is configured but not yet exercised.
+Nothing known broken. Untested: the camera path, quality gates (ML Kit found a face in every
+LFW image, so no gate was exercised), and anything needing persistence.
+
+The placeholder `matchThreshold` of 0.5 is **too high** for this model: E2 shows it would
+false-reject a genuine probe scoring 0.441. Thresholds stay uncalibrated until Phase 2/3.
 
 ## What decisions have been made?
 

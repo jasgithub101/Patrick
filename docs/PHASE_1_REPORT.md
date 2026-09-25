@@ -87,7 +87,11 @@ Status per component is tracked in section 6. Matcher and decision engine are `I
 | App module, M1 ModelInspector screen | `IMPLEMENTED` `TESTED` on emulator |
 | FaceMatcher (brute-force cosine, per-person aggregation, model-version guard) | `IMPLEMENTED` `TESTED` (JVM) |
 | RecognitionDecisionEngine | `IMPLEMENTED` `TESTED` (JVM) |
-| Detector, aligner, embedder wrapper, quality, DB, camera, UI | `PLANNED` (M2-M5) |
+| MlKitFaceDetector (ML Kit behind the FaceDetector interface) | `IMPLEMENTED`, compiles; untested on faces until E2 |
+| FaceAligner (5-point similarity transform to the ArcFace 112x112 template) | `IMPLEMENTED`, compiles |
+| FaceEmbeddingModel interface + ArcFaceOnnxEmbedder (w600k_mbf) | `IMPLEMENTED`, compiles |
+| BitmapImages (Bitmap <-> RgbImage edge adapters) | `IMPLEMENTED` |
+| Quality checker, Room database, camera, UI | `PLANNED` (M3-M6) |
 
 ## 7. Technical Decisions
 
@@ -343,13 +347,128 @@ Conclusion:  The SCRFD decoder will bind outputs by index with this layout, 2 an
              fast enough to develop against.
 ```
 
+### D14 — Embedding wrapper written by the user
+
+```text
+Context:    Four attempts by the agent to write the ONNX embedding wrapper were stopped by an
+            automated safety check or arrived truncated (see P11, P12). The user wrote the
+            file instead, from a contract the agent supplied (input/output shape, L2
+            normalisation, modelVersion, no android.* imports).
+Reviewed:   Preprocessing matches insightface v0.7 arcface_onnx.py: RGB (no BGR swap, since
+            RgbImage is already RGB), planar CHW, (px - 127.5) / 127.5. Input "input.1",
+            tensor [1, 3, 112, 112], output read from [1, 512]. All consistent with E1.
+Fixes applied by the agent before it compiled:
+            1. `nodeInfo.info.shape` does not compile - ValueInfo has no shape. Cast to
+               TensorInfo first (the same cast ModelInspector already uses).
+            2. Split into `interface FaceEmbeddingModel` + `class ArcFaceOnnxEmbedder`, as
+               CLAUDE.md section 12 requires, so callers do not depend on the ONNX class.
+            3. SessionOptions was closed only on the failure path; now closed on both.
+            4. Reused the existing match/VectorMath.l2Normalize instead of a second copy.
+Unverified: whether w600k_mbf contains its own Sub/Mul normalisation nodes (in which case
+            mean 0 / std 1 would be correct instead of 127.5/127.5). ASSUMED it does not.
+            Wrong normalisation would not crash; it would collapse the same-person vs
+            different-person separation, which experiment E2 measures directly.
+```
+
+### E2 — End-to-end recognition on real LFW faces (M2)
+
+```text
+Experiment:  Run the full pipeline (ML Kit detect -> 5-point align -> MobileFaceNet embed ->
+             brute-force cosine -> decision engine) on real face images.
+Objective:   Does recognition actually work, and do same-person and different-person
+             similarities separate? Also: is the (px-127.5)/127.5 preprocessing correct?
+Configuration:
+             Detector  ML Kit face-detection 16.1.7, PERFORMANCE_MODE_ACCURATE, all landmarks
+             Embedder  w600k_mbf@9cc6e4a7 (512-d, L2-normalised), ONNX Runtime 1.30.0
+             Matcher   BruteForceCosineMatcher, Aggregation.MAX
+             Device    AVD patrick_api36 (API 36 x86_64, WHPX), host AMD Ryzen 7 250
+Dataset:     logasja/lfw@0ee4797 via tools/prepare_dataset.py (deterministic, seed 20260924)
+             10 enrolled identities x 5 images = 50 gallery embeddings
+             10 held-out probes (1 per enrolled identity)
+             10 never-enrolled identities (UNKNOWN probes)
+Method:      app/src/androidTest/.../RecognitionPipelineTest.kt, run via
+             ./gradlew connectedDebugAndroidTest. All 5 tests passed.
+
+RESULT (MEASURED 2026-09-25, single run):
+
+  Detection        50/50 enrolment images produced a usable 5-landmark face (0 failures)
+                   70/70 images overall
+
+  Cosine similarity distributions
+                   same-person      n=100   min 0.376  p5 0.473  mean 0.623  p95 0.799  max 0.811
+                   different-person n=1125  min -0.233 p5 -0.080 mean 0.029  p95 0.152  max 0.285
+
+  Identification   rank-1 10/10 correct
+                   best-vs-runner-up margin: mean 0.568, min 0.160
+                   per-probe best score range 0.441 (Tim_Henman) to 0.876 (Fujio_Cho)
+
+  Unknown handling 10/10 never-enrolled probes -> UNKNOWN, 0 false MATCHes
+                   their best gallery score: mean 0.159, max 0.242
+
+  Latency (emulator, x86 host - NOT phone figures)
+                   detect  median 88 ms, p95 184 ms  (n=70)
+                   embed   median 15 ms, p95  45 ms  (n=70)
+
+Observation:  1. On this set the two distributions do NOT overlap: lowest same-person
+                 similarity 0.376 > highest different-person similarity 0.285. Any threshold
+                 in that gap separates all 70 images perfectly here.
+              2. This also CONFIRMS the preprocessing assumption from D14. Wrong
+                 normalisation would have collapsed the separation, and it did not.
+              3. The placeholder matchThreshold of 0.5 would FALSE-REJECT 1 of 10 probes
+                 (Tim_Henman at 0.441) while still rejecting every unknown. Evidence that
+                 0.5 is too high for this model, not that the model is weak.
+              4. ML Kit found a usable face in every image, so no quality gate was exercised.
+                 LFW images are well-framed press photos; live camera input will differ.
+
+Conclusion:   The M2 vertical slice works end to end on real faces. The ML Kit landmark
+              mismatch (D2) did not prevent recognition on this set; its cost relative to
+              SCRFD remains unmeasured.
+
+              This is NOT calibration and NOT an accuracy claim. 10 identities and 70 images
+              are far too few to estimate false-accept or false-reject rates, which need
+              orders of magnitude more comparisons. Threshold calibration is Phase 2/3 work on
+              the 100-person gallery and beyond. No number here transfers to the intended
+              population: LFW is celebrity web photography, and the model's own published
+              South Asian score is ~20 points below its LFW score (D3).
+```
+
 ## 9. Performance
 
-Nothing measured yet. The ≤ 2 s target is `PLANNED`, not achieved.
+`MEASURED` on the **emulator only** (E1, E2). Emulator timings run on an x86 laptop CPU and are
+**not** evidence about the ≤ 2 s phone target, which remains unverified.
+
+| Stage | Median | p95 | n |
+|---|---|---|---|
+| Face detection (ML Kit, full image) | 88 ms | 184 ms | 70 |
+| Embedding (MobileFaceNet, 112x112) | 15 ms | 45 ms | 70 |
+| Model load (detector / embedder, one-off) | 247 / 167 ms | - | 1 |
+
+Search latency is not yet measured at scale (the E2 gallery is only 50 embeddings). Total
+end-to-end latency awaits the camera path. Memory, battery and thermals: not measured.
 
 ## 10. Recognition Evaluation
 
-Not applicable yet.
+First real evaluation: see **E2** for the full setup and numbers. Summary, all `MEASURED`
+2026-09-25 on the emulator:
+
+| Item | Value |
+|---|---|
+| Dataset | LFW via `logasja/lfw@0ee4797`, deterministic subset |
+| Identities enrolled | 10, with 5 images each (50 gallery embeddings) |
+| Test samples | 10 held-out probes + 10 never-enrolled probes |
+| Known-person result | rank-1 10/10 correct |
+| Unknown-person result | 10/10 UNKNOWN, **0 false matches** |
+| False accepts | 0 of 10 at matchThreshold 0.5 |
+| False rejects | 1 of 10 would occur at matchThreshold 0.5 (probe scored 0.441) |
+| Same-person similarity | mean 0.623 (min 0.376) |
+| Different-person similarity | mean 0.029 (max 0.285) |
+| Best-vs-second-best margin | mean 0.568, min 0.160 |
+| Model version | `w600k_mbf@9cc6e4a7` |
+| Input quality | not gated; ML Kit found a usable face in all 70 images |
+
+**No accuracy percentage is claimed.** With 10 identities and 70 images, false-accept and
+false-reject rates cannot be estimated meaningfully; that needs a far larger gallery and many
+more comparisons (Phase 2/3). The observed separation is a property of this small sample.
 
 ## 11. Problems Encountered
 
@@ -362,6 +481,7 @@ Not applicable yet.
 | P5 | `graphify install --project` writes hooks calling bare `graphify`, which is not on PATH (it lives in `.venv`) | Resolved |
 | P6 | Fixing P5 by editing `.claude/settings.json`, and running the first `graphify update .`, were both denied by the auto-mode safety classifier as self-modification | Resolved by user decision |
 | P7 | `local.properties` written with `sdk.dir=C\:\Users\...`: the shell collapsed the doubled backslashes, and Java properties treats `\` as an escape, so the path would have resolved wrongly | Resolved: forward slashes (`C:/Users/jassu/Android/Sdk`) |
+| P12 | Writing the ONNX embedding wrapper failed the same way (safety check / truncated writes). Worked around by splitting the file into small appended chunks after the user supplied the code | Resolved; see D14 |
 | P11 | Writing the SCRFD decoder failed 4 times: 2 responses stopped by an automated safety check, others truncated mid-file or tool calls with missing parameters. Partial files were deleted so the build stayed green | Closed by user decision: detector switched to ML Kit (D2 revised). Recorded as a failed approach |
 | P10 | `move_to_cloud` refused: "This account has no cloud environment yet" | Closed by user decision: stay local |
 | P9 | Second build failed: `Unresolved reference: net` / `nio` in `app/build.gradle.kts`. Inside a Gradle Kotlin script `java` resolves to the `java {}` project extension, so `java.net.URI` is not the JDK package | Resolved with top-level `import java.net.URI` etc. |
@@ -405,20 +525,21 @@ Nothing is built. No app, no AVD, no measurements.
 [x] Models fetched (checksum-verified) and loaded on the emulator; tensor shapes dumped (E1)
 [x] Decision engine + brute-force matcher implemented; 22/22 JVM unit tests pass
     (incl. the different-person runner-up rule and the cross-model-version guard)
-[ ] Camera input
-[ ] Face detection
-[ ] Face alignment
-[ ] Embedding generation
-[ ] Local database (Room) with multiple embeddings per person
-[ ] Similarity search
-[ ] MATCH / UNCERTAIN / UNKNOWN decision engine
+[ ] Camera input                      <- moved to end of phase (D13)
+[x] Face detection                    ML Kit; 70/70 eval images, E2
+[x] Face alignment                    5-point similarity to ArcFace template
+[x] Embedding generation              w600k_mbf, 512-d, L2-normalised, E2
+[ ] Local database (Room) with multiple embeddings per person   <- next (M3)
+[x] Similarity search                 brute-force cosine, per-person aggregation
+[x] MATCH / UNCERTAIN / UNKNOWN        22 JVM tests + E2 on real faces
 [ ] Registration workflow (configurable image count, default 5)
 [ ] Quality checks
 [ ] Duplicate-registration warning
 [ ] Latency measurement
 [ ] ~100-person gallery via bulk enrolment
-[ ] Tests: no face, multiple faces, poor quality, registration, multiple embeddings,
-    persistence, known person, unknown person, uncertain, duplicate, latency
+[~] Tests: known person (E2, rank-1 10/10), unknown person (E2, 0 false matches),
+    latency (E2, emulator). Still to do: no face, multiple faces, poor quality,
+    registration, multiple embeddings, persistence, uncertain, duplicate
 ```
 
 ## 16. Final Phase State
