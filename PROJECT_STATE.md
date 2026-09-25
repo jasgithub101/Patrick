@@ -4,7 +4,7 @@ Short, always-current state of the project. Updated continuously.
 
 **Last updated:** 2026-09-24
 **Current phase:** Phase 1 — on-device face identification prototype
-**Current milestone:** M4 (quality checks) — M0-M3 complete
+**Current milestone:** M5 (100-person gallery) — M0-M4 complete
 
 Status vocabulary used throughout the docs:
 `PLANNED` · `IMPLEMENTED` · `TESTED` · `MEASURED` · `OBSERVED` · `ASSUMED` · `DEFERRED`
@@ -29,15 +29,17 @@ Status vocabulary used throughout the docs:
 | Decision engine (MATCH/UNCERTAIN/UNKNOWN) | `IMPLEMENTED` `TESTED` `MEASURED` — 12 JVM tests + E2 |
 | Registration flow (configurable images, default 5; dummy ABHA IDs) | `IMPLEMENTED` `TESTED` |
 | Duplicate detection (warns, never auto-merges) | `IMPLEMENTED` `TESTED` |
-| Latency measurement | `PLANNED` |
+| Quality checks (7 gates, actionable messages) | `IMPLEMENTED` `TESTED` `MEASURED` |
+| Runtime-configurable thresholds (DataStore) | `IMPLEMENTED` — no UI yet |
+| Per-stage latency measurement | `IMPLEMENTED` `MEASURED` (emulator only) |
 
 ## What is currently being worked on?
 
 **Where:** locally on the laptop. A cloud-session move was attempted, but the account has no
 cloud environment, and the user chose to continue locally.
 
-**M3 is complete.** Next is M4: the quality checker (no face, multiple faces, too small, blur,
-lighting, pose from ML Kit head angles) plus runtime-configurable thresholds.
+**M4 is complete.** Next is M5: bulk-enrol the ~100-person LFW gallery, then run a scripted probe
+pass over it to measure search latency and recognition behaviour at that scale.
 
 ## What works?
 
@@ -50,14 +52,22 @@ lighting, pose from ML Kit head angles) plus runtime-configurable thresholds.
   afterwards. Embedding vectors round-trip bit-for-bit.
 - **Duplicate registration is caught**: a warning is raised, nothing is written, and identities
   are never merged automatically. An operator can override with `force`.
-- **53 tests pass** (33 JVM + 20 instrumented), 0 failures.
+- **Quality gates work on real data**: 67/70 ordinary photos accepted; blurred, dark and
+  multi-person inputs rejected with actionable messages; a rejected image is never embedded.
+  Thresholds were calibrated from a measured survey (E3) after the first guesses rejected 31% of
+  ordinary photos.
+- **Full pipeline latency on the emulator: 94 ms** (detect 59, quality 7, align 14, embed 14).
+  Not a phone figure.
+- **91 tests pass** (62 JVM + 29 instrumented), 0 failures.
 - Emulator latency: detection 88 ms median, embedding 15 ms median. **Not** phone figures.
 - **Not yet built:** quality checks (M4), bulk 100-person enrolment (M5), camera and UI (M6).
 
 ## What doesn't work?
 
-Nothing known broken. Untested: the camera path, quality gates (ML Kit found a face in every
-LFW image, so no gate was exercised), and anything needing persistence.
+Nothing known broken. Untested: the camera path (M6).
+
+Known rough edge: an over-exposed face is rejected as "no face detected" rather than "move out of
+direct light", because the detector fails before the brightness gate (E4).
 
 The placeholder `matchThreshold` of 0.5 is **too high** for this model: E2 shows it would
 false-reject a genuine probe scoring 0.441. Thresholds stay uncalibrated until Phase 2/3.
@@ -93,10 +103,9 @@ Revised build order (report D13: images first, camera last):
 
 1. ~~**M2:** ML Kit detection, alignment, embedding, matcher, decision engine.~~ **Done** (E2).
 2. ~~**M3:** Room database, multi-embedding registration, dummy ABHA IDs, persistence.~~ **Done.**
-3. **M4 (next):** quality checks (no face, multiple faces, too small, blur, lighting, pose from
-   ML Kit head angles); thresholds configurable at runtime rather than hard-coded.
-4. **M5:** bulk-enrol the 100-person LFW gallery; duplicate-registration warning; scripted probe
-   run with per-stage timings.
+3. ~~**M4:** quality checks and runtime-configurable thresholds.~~ **Done** (E3, E4).
+4. **M5 (next):** bulk-enrol the ~100-person LFW gallery; scripted probe run measuring search
+   latency and recognition at that scale. (Duplicate detection already landed in M3.)
 5. **M6 (last):** CameraX + guided registration/identify UI. Tested on the physical phone if
    available, otherwise the emulator webcam. **Phase 1 cannot close without this.**
 

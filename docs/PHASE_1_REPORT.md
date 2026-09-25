@@ -94,7 +94,9 @@ Status per component is tracked in section 6. Matcher and decision engine are `I
 | Room database (person / embedding / audit), FaceRepository | `IMPLEMENTED` `TESTED` — 9 instrumented tests |
 | RegistrationService, configurable images-per-person, dummy ABHA IDs | `IMPLEMENTED` `TESTED` |
 | Duplicate-registration warning (never auto-merges) | `IMPLEMENTED` `TESTED` — 6 instrumented tests |
-| Quality checker | `PLANNED` (M4) |
+| FaceQualityChecker (7 gates, actionable messages, prominence-based face choice) | `IMPLEMENTED` `TESTED` `MEASURED` — E3, E4 |
+| RecognitionPipeline (detect -> quality -> align -> embed, per-stage timings) | `IMPLEMENTED` `TESTED` |
+| Runtime-configurable settings (DataStore) | `IMPLEMENTED` — not yet exposed in a UI |
 | Camera + UI | `PLANNED` (M6, last — D13) |
 
 ## 7. Technical Decisions
@@ -493,6 +495,96 @@ Conclusion:   The M2 vertical slice works end to end on real faces. The ML Kit l
               South Asian score is ~20 points below its LFW score (D3).
 ```
 
+### E3 — Quality-metric survey and threshold calibration (M4)
+
+```text
+Experiment:  Measure what the quality metrics actually look like on genuine face photos, then set
+             the thresholds from that distribution.
+Why:         The first thresholds were guesses, and they were wrong. With minBlurVariance = 60
+             and a strict multiple-face rule, the gates rejected 22 of 70 ordinary LFW photos
+             (31 percent): MULTIPLE_FACES 10, TOO_BLURRY 11, EXTREME_POSE 1. Quality scores
+             peaked at 0.41 (mean 0.17), so the intended minQuality of 0.35 would have rejected
+             most genuine faces and broken recognition outright.
+Method:      QualityMetricsSurveyTest with every gate opened wide, so all 70 eval images are
+             measured rather than rejected. Floors then set BELOW the observed minimum.
+
+MEASURED distributions on 70 genuine LFW faces (2026-09-25):
+
+  faces per image     1 face: 60   2 faces: 7   3 faces: 1   4 faces: 2
+  interOcularPx       min 21.0  p5 32.5  median 39.6  p75 41.7  max 46.7
+  blurVariance        min 15.9  p5 41.0  median 104.5 p75 172.1 max 750.1
+  meanLuminance       min 83.5  p5 94.0  median 123.9 p75 137.5 max 174.0
+  clippedFraction     min 0.0   median 0.00008        max 0.045
+  abs yaw (deg)       median 7.5   p75 14.4  max 52.9
+  abs pitch (deg)     median 5.2   p75 8.4   max 34.8
+  abs roll (deg)      median 4.5   p75 6.9   max 24.8
+
+Calibration applied:
+  minInterOcularPx     24  -> 18   (below the observed min of 21)
+  minBlurVariance      60  -> 12   (below the observed min of 16; the old value cut off 16 pct)
+  maxAbsYaw            35  -> 45   maxAbsPitch 30 -> 40   (roll unchanged at 30)
+  minAcceptableScore   0.35 -> 0.10   decision minQuality 0.35 -> 0.10
+  scoring anchors      GOOD_INTER_OCULAR 80 -> 60, GOOD_BLUR_VARIANCE 500 -> 150
+  multiple-face rule   any second face -> only a second face larger than 0.5x the subject area
+
+Observation:  1. 14 percent of ordinary LFW photos contain a background face. Rejecting on ANY
+                 second face would make the app unusable in public places, so the rule now picks
+                 the most prominent face and rejects only when a second is comparably large,
+                 i.e. when it is genuinely ambiguous who the operator meant.
+              2. LFW faces span only 21 to 47 px between the eyes, because the images are
+                 250x250 web photos. The ArcFace template spans about 35 px at 112x112, so many
+                 of these faces are being UPSAMPLED. E2 nevertheless got rank-1 10/10 on them,
+                 so they are usable, but a camera-based deployment should raise this floor.
+              3. Gate ORDER matters for usefulness, not just correctness: a blown-out image also
+                 fails the blur test, so checking blur first told the operator to "hold steady"
+                 when the real problem was glare. Lighting is now checked before blur. Caught by
+                 a JVM unit test, not by inspection.
+
+Conclusion:   Thresholds are now derived from measured data rather than intuition, and are
+              recorded as such. They remain UNCALIBRATED in the statistical sense: 70 images from
+              one dataset cannot fix an operating point, and LFW's low resolution biases the size
+              and blur floors downwards. Real camera input will differ, and the floors should be
+              re-measured once live captures exist.
+```
+
+### E4 — Quality gates on real and deliberately degraded images (M4)
+
+```text
+Experiment:  Verify the gates accept ordinary photos and reject genuinely bad input.
+Method:      QualityGateTest on the emulator. Good case: all 70 LFW eval images. Bad cases derived
+             from a real eval image so only the defect differs: 12 passes of 3x3 box blur, x0.12
+             brightness, x4.0 brightness, two eval faces composited side by side, and a flat image.
+Configuration: calibrated thresholds from E3; ML Kit ACCURATE mode; w600k_mbf@9cc6e4a7.
+
+RESULT (MEASURED 2026-09-25):
+
+  Genuine photos accepted      67/70 (96 pct)
+    remaining rejections       MULTIPLE_FACES 2, EXTREME_POSE 1
+                               all three inspected and defensible: two images contain several
+                               comparably sized people, one has a head turn beyond 45 degrees
+  Quality score range          min 0.029, mean 0.432, max 0.683  (was max 0.41, mean 0.17)
+
+  Degraded inputs
+    flat grey image            NO_FACE
+    12x box blur               TOO_BLURRY (blurVariance 1.4, versus a genuine min of 15.9)
+    x0.12 brightness           TOO_DARK (meanLuminance 17.6, versus a genuine min of 83.5)
+    x4.0 brightness            NO_FACE - the detector loses the face entirely before the
+                               brightness gate is reached. Still rejected, but the operator gets
+                               "no face detected" rather than "move out of direct light". Recorded
+                               as a wording limitation, not a safety one.
+    two people side by side    MULTIPLE_FACES
+    any rejection              alignMs = 0 and embedMs = 0, asserted: a rejected image is never
+                               aligned or embedded, so bad data cannot reach the gallery
+
+  Full-pipeline latency (emulator, single accepted image)
+    detect 59 ms, quality 7 ms, align 14 ms, embed 14 ms, total 94 ms
+
+Conclusion:   The gates behave as intended on real data, and rejection provably short-circuits
+              before embedding. Recognition results from E2 are unchanged by the quality layer
+              (rank-1 10/10, 0 false matches).
+              Latency is an EMULATOR figure and is NOT evidence about the 2 s phone target.
+```
+
 ## 9. Performance
 
 `MEASURED` on the **emulator only** (E1, E2). Emulator timings run on an x86 laptop CPU and are
@@ -500,12 +592,18 @@ Conclusion:   The M2 vertical slice works end to end on real faces. The ML Kit l
 
 | Stage | Median | p95 | n |
 |---|---|---|---|
-| Face detection (ML Kit, full image) | 88 ms | 184 ms | 70 |
-| Embedding (MobileFaceNet, 112x112) | 15 ms | 45 ms | 70 |
+| Face detection (ML Kit, full image) | 53 ms | 91 ms | 70 |
+| Quality assessment | 7 ms | - | 1 |
+| Alignment (112x112 warp) | 14 ms | - | 1 |
+| Embedding (MobileFaceNet, 112x112) | 11 ms | 16 ms | 70 |
+| **Full pipeline, accepted image** | **94 ms** | - | 1 |
 | Model load (detector / embedder, one-off) | 247 / 167 ms | - | 1 |
 
-Search latency is not yet measured at scale (the E2 gallery is only 50 embeddings). Total
-end-to-end latency awaits the camera path. Memory, battery and thermals: not measured.
+A rejected image costs only detection plus the quality check (about 60 ms here) because it never
+reaches alignment or embedding.
+
+Search latency is not yet measured at scale (the E2 gallery is only 50 embeddings). Memory,
+battery and thermals: not measured. Camera capture latency: not measured (M6).
 
 ## 10. Recognition Evaluation
 
@@ -574,8 +672,12 @@ What the system still cannot do, as of 2026-09-25:
 
 - **No camera.** Recognition only runs on image files. Deliberate (D13); it is the last M6 step
   and Phase 1 cannot close without it.
-- **No quality gating.** Blurred, tiny, dark, multi-face and no-face inputs are not yet
-  rejected. ML Kit found a usable face in all 70 LFW images, so nothing exercised a gate (M4).
+- **Quality gates are calibrated on 70 LFW images only** (E3). LFW is low-resolution web
+  photography, which drags the size and blur floors down; live camera input will differ, and the
+  floors should be re-measured once real captures exist.
+- **An over-exposed face reports "no face detected"** rather than "move out of direct light",
+  because the detector fails before the brightness gate is reached (E4). Rejection is correct;
+  the wording is not the most helpful.
 - **No UI.** The only screen is the M1 model-inspector diagnostic.
 - **Thresholds are uncalibrated**, and E2 shows the placeholder 0.5 is too high: it would
   false-reject a genuine probe scoring 0.441.
@@ -609,7 +711,7 @@ What the system still cannot do, as of 2026-09-25:
 [x] Similarity search                 brute-force cosine, per-person aggregation
 [x] MATCH / UNCERTAIN / UNKNOWN        22 JVM tests + E2 on real faces
 [x] Registration workflow (configurable image count, default 5)
-[ ] Quality checks
+[x] Quality checks (7 gates, calibrated in E3, verified in E4)
 [x] Duplicate-registration warning (D17)
 [ ] Latency measurement
 [ ] ~100-person gallery via bulk enrolment
@@ -621,7 +723,8 @@ What the system still cannot do, as of 2026-09-25:
     [x] database persistence across a close/reopen cycle
     [x] duplicate registration (warns, stores nothing, never merges)
     [x] uncertain / ambiguous margin (12 JVM decision-engine tests)
-    [ ] no face, multiple faces, poor quality  <- M4, needs the quality checker
+    [x] no face, multiple faces, poor quality (blur / dark / bright) — E4
+    [x] quality thresholds calibrated from measured data — E3
 ```
 
 ## 16. Final Phase State

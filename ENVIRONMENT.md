@@ -338,7 +338,7 @@ with the project directory plus the Gradle cache.
 | Jetpack Compose | BOM 2025.10.01 | UI |
 | AndroidX core / activity / lifecycle | 1.17.0 / 1.11.0 / 2.9.4 | App framework |
 | kotlinx-coroutines | 1.10.2 | Background work |
-| DataStore Preferences | 1.1.7 | Configurable thresholds (pinned, not yet used) |
+| DataStore Preferences | 1.1.7 | Runtime-configurable thresholds (in use) |
 
 Why these versions rather than the newest: see `docs/PHASE_1_REPORT.md` decision D11.
 
@@ -396,6 +396,7 @@ Origin:             PROJECT-INSTALLED
 | 2026-09-24 | Baseline recorded. JDK 17, Android cmdline-tools, SDK licences installed. SDK component install started. |
 | 2026-09-24 | SDK components verified installed (API 36, build-tools 36.0.0, emulator 37.1.11.0, platform-tools 37.0.1). |
 | 2026-09-24 | Project `.venv` created; Graphify 0.9.67 installed into it and registered project-scoped. Hook path issue open. |
+| 2026-09-25 | M4: quality gates + DataStore settings. Thresholds calibrated from a measured survey (report E3). |
 | 2026-09-25 | M2 + M3: ML Kit detection, alignment, embedding, Room persistence, registration. pyarrow + LFW cache recorded in section 5. |
 | 2026-09-24 | Gradle 8.14.3 wrapper generated; first successful build; AVD `patrick_api36` created and booted (WHPX usable). |
 | 2026-09-24 | User removed Graphify hooks (`.claude/settings.json`). Initial graph built. Git remote `origin` added (public repo `jasgithub101/Patrick`); not yet pushed. |
