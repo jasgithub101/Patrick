@@ -4,7 +4,7 @@ Short, always-current state of the project. Updated continuously.
 
 **Last updated:** 2026-09-24
 **Current phase:** Phase 1 — on-device face identification prototype
-**Current milestone:** M2 (vertical slice) — M0 and M1 complete
+**Current milestone:** M4 (quality checks) — M0-M3 complete
 
 Status vocabulary used throughout the docs:
 `PLANNED` · `IMPLEMENTED` · `TESTED` · `MEASURED` · `OBSERVED` · `ASSUMED` · `DEFERRED`
@@ -24,11 +24,11 @@ Status vocabulary used throughout the docs:
 | AVD `patrick_api36` (webcam0 front camera, WHPX) | `IMPLEMENTED` `TESTED` — boots, app installs and runs |
 | Face detection (ML Kit) | `IMPLEMENTED` `TESTED` `MEASURED` — 70/70 eval images, E2 |
 | Face alignment + embedding (MobileFaceNet 512-d) | `IMPLEMENTED` `TESTED` `MEASURED` — E2 |
-| Room database | `PLANNED` |
+| Room database (person / embedding / audit, schema v1 exported) | `IMPLEMENTED` `TESTED` |
 | Similarity search (brute-force cosine, per-person max / mean-top-2, model-version guard) | `IMPLEMENTED` `TESTED` `MEASURED` — 10 JVM tests + E2 |
 | Decision engine (MATCH/UNCERTAIN/UNKNOWN) | `IMPLEMENTED` `TESTED` `MEASURED` — 12 JVM tests + E2 |
-| Registration flow | `PLANNED` |
-| Duplicate detection | `PLANNED` |
+| Registration flow (configurable images, default 5; dummy ABHA IDs) | `IMPLEMENTED` `TESTED` |
+| Duplicate detection (warns, never auto-merges) | `IMPLEMENTED` `TESTED` |
 | Latency measurement | `PLANNED` |
 
 ## What is currently being worked on?
@@ -36,8 +36,8 @@ Status vocabulary used throughout the docs:
 **Where:** locally on the laptop. A cloud-session move was attempted, but the account has no
 cloud environment, and the user chose to continue locally.
 
-**M2 is complete** (image-based). The full recognition pipeline runs end to end on real LFW
-faces: see report E2. Next is M3, the Room database and registration workflow.
+**M3 is complete.** Next is M4: the quality checker (no face, multiple faces, too small, blur,
+lighting, pose from ML Kit head angles) plus runtime-configurable thresholds.
 
 ## What works?
 
@@ -45,9 +45,14 @@ faces: see report E2. Next is M3, the Room database and registration workflow.
   10 enrolled identities x 5 images, rank-1 **10/10** correct on held-out probes, and
   **0 false matches** on 10 never-enrolled people. Same-person similarity mean 0.623 vs
   different-person mean 0.029, with no overlap on this small set.
-- 22/22 JVM unit tests and 5/5 instrumented tests pass.
+- **Registration and persistence work**: a person is stored with several embeddings, survives an
+  app restart (verified by closing and reopening the real database file), and is still recognised
+  afterwards. Embedding vectors round-trip bit-for-bit.
+- **Duplicate registration is caught**: a warning is raised, nothing is written, and identities
+  are never merged automatically. An operator can override with `force`.
+- **53 tests pass** (33 JVM + 20 instrumented), 0 failures.
 - Emulator latency: detection 88 ms median, embedding 15 ms median. **Not** phone figures.
-- **Not yet built:** database, registration, quality checks, camera.
+- **Not yet built:** quality checks (M4), bulk 100-person enrolment (M5), camera and UI (M6).
 
 ## What doesn't work?
 
@@ -86,13 +91,10 @@ It does not block M2-M5.
 
 Revised build order (report D13: images first, camera last):
 
-1. **M2 (image-based slice):** ML Kit detection, 5-point alignment to 112x112, MobileFaceNet
-   embedding, matcher and decision engine. Tested on the LFW eval set with instrumented tests
-   on the emulator. No camera and no user involvement.
-2. **M3:** Room database, multi-embedding registration (default 5, configurable), dummy ABHA IDs,
-   persistence across restarts.
-3. **M4:** quality checks (no face, multiple faces, too small, blur, lighting, pose from ML Kit
-   head angles); thresholds configurable at runtime.
+1. ~~**M2:** ML Kit detection, alignment, embedding, matcher, decision engine.~~ **Done** (E2).
+2. ~~**M3:** Room database, multi-embedding registration, dummy ABHA IDs, persistence.~~ **Done.**
+3. **M4 (next):** quality checks (no face, multiple faces, too small, blur, lighting, pose from
+   ML Kit head angles); thresholds configurable at runtime rather than hard-coded.
 4. **M5:** bulk-enrol the 100-person LFW gallery; duplicate-registration warning; scripted probe
    run with per-stage timings.
 5. **M6 (last):** CameraX + guided registration/identify UI. Tested on the physical phone if

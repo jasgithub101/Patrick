@@ -331,10 +331,10 @@ with the project directory plus the Gradle cache.
 | Android Gradle Plugin | 8.13.2 | Android build |
 | Gradle (via wrapper) | 8.14.3 | Build tool; downloaded to `~/.gradle`, not installed system-wide |
 | Kotlin | 2.2.20 | Language / compiler |
-| KSP | 2.2.20-2.0.3 | Room annotation processing (pinned, not yet applied) |
+| KSP | 2.2.20-2.0.3 | Room annotation processing (applied) |
 | ONNX Runtime Android | 1.30.0 | On-device inference for detector + embedder |
 | CameraX | 1.5.1 | Camera capture (pinned, not yet used) |
-| Room | 2.8.3 | SQLite persistence (pinned, not yet used) |
+| Room | 2.8.3 | SQLite persistence (in use: person / embedding / audit, schema v1) |
 | Jetpack Compose | BOM 2025.10.01 | UI |
 | AndroidX core / activity / lifecycle | 1.17.0 / 1.11.0 / 2.9.4 | App framework |
 | kotlinx-coroutines | 1.10.2 | Background work |
@@ -396,5 +396,6 @@ Origin:             PROJECT-INSTALLED
 | 2026-09-24 | Baseline recorded. JDK 17, Android cmdline-tools, SDK licences installed. SDK component install started. |
 | 2026-09-24 | SDK components verified installed (API 36, build-tools 36.0.0, emulator 37.1.11.0, platform-tools 37.0.1). |
 | 2026-09-24 | Project `.venv` created; Graphify 0.9.67 installed into it and registered project-scoped. Hook path issue open. |
+| 2026-09-25 | M2 + M3: ML Kit detection, alignment, embedding, Room persistence, registration. pyarrow + LFW cache recorded in section 5. |
 | 2026-09-24 | Gradle 8.14.3 wrapper generated; first successful build; AVD `patrick_api36` created and booted (WHPX usable). |
 | 2026-09-24 | User removed Graphify hooks (`.claude/settings.json`). Initial graph built. Git remote `origin` added (public repo `jasgithub101/Patrick`); not yet pushed. |

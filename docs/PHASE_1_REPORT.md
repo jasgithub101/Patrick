@@ -91,7 +91,11 @@ Status per component is tracked in section 6. Matcher and decision engine are `I
 | FaceAligner (5-point similarity transform to the ArcFace 112x112 template) | `IMPLEMENTED`, compiles |
 | FaceEmbeddingModel interface + ArcFaceOnnxEmbedder (w600k_mbf) | `IMPLEMENTED`, compiles |
 | BitmapImages (Bitmap <-> RgbImage edge adapters) | `IMPLEMENTED` |
-| Quality checker, Room database, camera, UI | `PLANNED` (M3-M6) |
+| Room database (person / embedding / audit), FaceRepository | `IMPLEMENTED` `TESTED` — 9 instrumented tests |
+| RegistrationService, configurable images-per-person, dummy ABHA IDs | `IMPLEMENTED` `TESTED` |
+| Duplicate-registration warning (never auto-merges) | `IMPLEMENTED` `TESTED` — 6 instrumented tests |
+| Quality checker | `PLANNED` (M4) |
+| Camera + UI | `PLANNED` (M6, last — D13) |
 
 ## 7. Technical Decisions
 
@@ -315,6 +319,63 @@ Reason:     Gradle wires the task dependency automatically, so there are no impl
               w600k_mbf.onnx  9cc6e4a7…b319eb4f
 ```
 
+### D15 — Database schema and persistence (M3)
+
+```text
+Decision:   Persistence layer
+Selected:   Room 2.8.3 over SQLite (KSP 2.2.20-2.0.3), three tables, schema version 1
+            exported to app/schemas/ and committed.
+            person(personId, dummyAbhaId UNIQUE, displayName, createdAt)
+            embedding(embeddingId, personId FK CASCADE, vector BLOB, modelVersion, dim,
+                      captureRole, createdAt)
+            audit(auditId, timestamp, operation, outcome, personId, details)
+Reason:     Matches the conceptual model in CLAUDE.md section 7. Room gives compile-time
+            checked queries and a schema baseline for later migrations. WAL journal mode, so
+            an interrupted write cannot leave a person without embeddings.
+Trade-offs: KSP adds build time. Room is Android-only, so DB tests must be instrumented.
+Details:    - Embeddings are stored as little-endian float32 BLOBs (EmbeddingCodec) with byte
+              order fixed explicitly, so a database file stays readable across devices.
+              Round-trip is lossless and asserted bit-for-bit.
+            - modelVersion and dim are stored PER ROW, and loadGallery filters on both. Rows
+              from another model version are never loaded into the same gallery.
+            - Registration writes the person, all embeddings and the audit entry in ONE
+              transaction.
+            - No encryption yet. The Phase 1 MVP list includes local encryption; it is
+              DEFERRED and recorded as a limitation, not silently dropped.
+```
+
+### D16 — Dummy ABHA identifiers are prefixed, not bare digits
+
+```text
+Decision:   Format of the placeholder health identifier
+Options:    (a) 14 bare digits, like a real ABHA number  (b) a clearly marked placeholder
+Selected:   (b) "DUMMY-" + 14 digits
+Reason:     A bare 14-digit value is indistinguishable from a real ABHA number, so it could be
+            copied into a real system, or a test record mistaken for a real one. The prefix
+            makes that impossible, and isDummy() can assert it. Cheap safety for a prototype
+            that handles health identifiers.
+Trade-offs: Not format-identical to the real thing, so any future real-ABHA code path cannot
+            be exercised with these values. That is intentional: real linkage must go through
+            the authorised ABDM workflow (Phase 1 scope excludes it).
+```
+
+### D17 — Duplicate detection landed in M3 rather than M5
+
+```text
+Decision:   When to implement the duplicate-registration warning
+Selected:   With registration (M3), earlier than the M5 slot in the original milestone plan.
+Reason:     CLAUDE.md section 6 makes the duplicate check part of registration itself, and it
+            reuses the already-tested matcher, so building registration without it would have
+            meant revisiting the same class.
+Behaviour:  Scores every new embedding against the existing gallery and keeps the strongest
+            hit, since one matching image is enough to warrant a warning. Above the threshold
+            it returns PossibleDuplicate and writes NOTHING. Identities are never merged
+            automatically. `force = true` lets the operator override after confirming.
+            The warn threshold (0.35) is stricter than the identification threshold on purpose:
+            a false warning costs one confirmation, a missed duplicate creates two records for
+            one person. UNCALIBRATED - Phase 1 has evidence from 10 identities only (E2).
+```
+
 ## 8. Experiments
 
 ### E1 — Model tensor layout and load/inference on the emulator (M1)
@@ -509,7 +570,22 @@ more comparisons (Phase 2/3). The observed separation is a property of this smal
 
 ## 14. Current Limitations
 
-Nothing is built. No app, no AVD, no measurements.
+What the system still cannot do, as of 2026-09-25:
+
+- **No camera.** Recognition only runs on image files. Deliberate (D13); it is the last M6 step
+  and Phase 1 cannot close without it.
+- **No quality gating.** Blurred, tiny, dark, multi-face and no-face inputs are not yet
+  rejected. ML Kit found a usable face in all 70 LFW images, so nothing exercised a gate (M4).
+- **No UI.** The only screen is the M1 model-inspector diagnostic.
+- **Thresholds are uncalibrated**, and E2 shows the placeholder 0.5 is too high: it would
+  false-reject a genuine probe scoring 0.441.
+- **Only 10 identities evaluated**, not the ~100 target. No FAR/FRR estimate is possible.
+- **No local encryption.** On the Phase 1 MVP list; DEFERRED, and now recorded rather than
+  quietly dropped.
+- **No latency evidence on real hardware.** Emulator figures only; no physical phone yet.
+- **ML Kit sends diagnostics to Google** (never images or face data) with no documented opt-out
+  (D2 revised).
+- **Model weights are non-commercial research only** (D3), so they cannot ship in a product.
 
 ## 15. Phase Completion Checklist
 
@@ -532,14 +608,20 @@ Nothing is built. No app, no AVD, no measurements.
 [ ] Local database (Room) with multiple embeddings per person   <- next (M3)
 [x] Similarity search                 brute-force cosine, per-person aggregation
 [x] MATCH / UNCERTAIN / UNKNOWN        22 JVM tests + E2 on real faces
-[ ] Registration workflow (configurable image count, default 5)
+[x] Registration workflow (configurable image count, default 5)
 [ ] Quality checks
-[ ] Duplicate-registration warning
+[x] Duplicate-registration warning (D17)
 [ ] Latency measurement
 [ ] ~100-person gallery via bulk enrolment
-[~] Tests: known person (E2, rank-1 10/10), unknown person (E2, 0 false matches),
-    latency (E2, emulator). Still to do: no face, multiple faces, poor quality,
-    registration, multiple embeddings, persistence, uncertain, duplicate
+[~] Tests (53 total, all passing: 33 JVM + 20 instrumented)
+    [x] known person (E2, rank-1 10/10)
+    [x] unknown person (E2, 0 false matches)
+    [x] latency (E2, emulator only)
+    [x] registration, multiple embeddings per person
+    [x] database persistence across a close/reopen cycle
+    [x] duplicate registration (warns, stores nothing, never merges)
+    [x] uncertain / ambiguous margin (12 JVM decision-engine tests)
+    [ ] no face, multiple faces, poor quality  <- M4, needs the quality checker
 ```
 
 ## 16. Final Phase State
